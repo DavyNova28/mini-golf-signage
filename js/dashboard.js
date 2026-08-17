@@ -9,8 +9,6 @@
 
     const SCREEN_NAMES = [
       "Arcade",
-      "ArcadeWeek",
-      "ArcadeSunday",
       "Golf",
       "Slush",
       "infoArcade"
@@ -24,12 +22,12 @@
       "version.json";
 
     const APPLICATION_RELEASE_FALLBACK = {
-      version: "1.2.0",
-      displayVersion: "1.2",
+      version: "1.3.0",
+      displayVersion: "1.3",
       channel: "Stable",
-      build: "100",
-      status: "Release Candidate 1",
-      tag: "v1.2.0"
+      build: "113",
+      status: "Stable Release",
+      tag: "v1.3.0"
     };
 
     let applicationRelease = {
@@ -71,6 +69,1269 @@
     const EXPECTED_PLAYER_VERSION =
       "v3.1-heartbeat-1";
 
+
+    /*
+     * =====================================================
+     * VERSION 1.3 — BUILD 101
+     * BUSINESS PROFILE ENGINE
+     * =====================================================
+     *
+     * Build 101 is intentionally informational only.
+     * It does NOT change Health Score, expected-player logic,
+     * Rollout Assistant behavior, or signage scheduling.
+     */
+
+    const BUSINESS_PROFILES = {
+      summer: {
+        id: "summer",
+        label: "Summer",
+        icon: "☀️",
+        rangeLabel: "June 23 – August 31",
+        hours: {
+          0: { open: "10:00", close: "20:00" },
+          1: { open: "10:00", close: "22:00" },
+          2: { open: "10:00", close: "22:00" },
+          3: { open: "10:00", close: "22:00" },
+          4: { open: "10:00", close: "22:00" },
+          5: { open: "10:00", close: "22:00" },
+          6: { open: "10:00", close: "22:00" }
+        }
+      },
+
+      regular: {
+        id: "regular",
+        label: "Regular",
+        icon: "🍂",
+        rangeLabel: "September 1 – June 22",
+        hours: {
+          0: { open: "10:00", close: "20:00" },
+          1: { closed: true },
+          2: { closed: true },
+          3: { open: "14:00", close: "21:00" },
+          4: { open: "14:00", close: "22:00" },
+          5: { open: "14:00", close: "22:00" },
+          6: { open: "10:00", close: "22:00" }
+        }
+      }
+    };
+
+    /*
+     * Special/Holiday business hours will live here when
+     * official hours are available. Keeping this separate
+     * from signage Holiday Overrides prevents Build 101 from
+     * guessing store hours from image schedule rows.
+     *
+     * Example future entry:
+     * {
+     *   date: "2026-12-26",
+     *   label: "Boxing Day",
+     *   open: "10:00",
+     *   close: "20:00"
+     * }
+     */
+    const BUSINESS_SPECIAL_DATES = [];
+
+
+    function getBusinessDateKey(
+      date = new Date()
+    ) {
+      const year =
+        date.getFullYear();
+
+      const month =
+        String(
+          date.getMonth() + 1
+        ).padStart(
+          2,
+          "0"
+        );
+
+      const day =
+        String(
+          date.getDate()
+        ).padStart(
+          2,
+          "0"
+        );
+
+      return `${year}-${month}-${day}`;
+    }
+
+
+    function isSummerBusinessDate(
+      date = new Date()
+    ) {
+      const monthDay =
+        (
+          date.getMonth() + 1
+        ) *
+        100 +
+        date.getDate();
+
+      return (
+        monthDay >= 623 &&
+        monthDay <= 831
+      );
+    }
+
+
+    function getSeasonalBusinessProfile(
+      date = new Date()
+    ) {
+      return isSummerBusinessDate(
+        date
+      )
+        ? BUSINESS_PROFILES.summer
+        : BUSINESS_PROFILES.regular;
+    }
+
+
+    function getBusinessSpecialDate(
+      date = new Date()
+    ) {
+      const dateKey =
+        getBusinessDateKey(
+          date
+        );
+
+      return BUSINESS_SPECIAL_DATES.find(
+        item =>
+          item &&
+          item.date === dateKey
+      ) || null;
+    }
+
+
+    function getBusinessProfileForDate(
+      date = new Date()
+    ) {
+      const seasonalProfile =
+        getSeasonalBusinessProfile(
+          date
+        );
+
+      const special =
+        getBusinessSpecialDate(
+          date
+        );
+
+      const seasonalHours =
+        seasonalProfile.hours[
+          date.getDay()
+        ] || {
+          closed: true
+        };
+
+      if (!special) {
+        return {
+          profile:
+            seasonalProfile,
+
+          hours:
+            seasonalHours,
+
+          special:
+            null
+        };
+      }
+
+      return {
+        profile: {
+          id:
+            "special",
+
+          label:
+            special.label ||
+            "Special / Holiday",
+
+          icon:
+            "🎉",
+
+          rangeLabel:
+            "Date-specific override"
+        },
+
+        hours:
+          special.closed
+            ? {
+                closed: true
+              }
+            : {
+                open:
+                  special.open,
+
+                close:
+                  special.close
+              },
+
+        special:
+          special,
+
+        baseProfile:
+          seasonalProfile
+      };
+    }
+
+
+    function businessTimeToMinutes(
+      value
+    ) {
+      const parts =
+        String(
+          value || ""
+        ).split(
+          ":"
+        );
+
+      if (parts.length !== 2) {
+        return null;
+      }
+
+      const hours =
+        Number(
+          parts[0]
+        );
+
+      const minutes =
+        Number(
+          parts[1]
+        );
+
+      if (
+        !Number.isInteger(hours) ||
+        !Number.isInteger(minutes)
+      ) {
+        return null;
+      }
+
+      return (
+        hours * 60 +
+        minutes
+      );
+    }
+
+
+    function formatBusinessClock(
+      value
+    ) {
+      const minutes =
+        businessTimeToMinutes(
+          value
+        );
+
+      if (minutes === null) {
+        return "—";
+      }
+
+      const hours24 =
+        Math.floor(
+          minutes / 60
+        );
+
+      const minuteValue =
+        minutes % 60;
+
+      const suffix =
+        hours24 >= 12
+          ? "PM"
+          : "AM";
+
+      const hours12 =
+        hours24 % 12 || 12;
+
+      return (
+        `${hours12}:` +
+        `${String(minuteValue).padStart(2, "0")} ` +
+        suffix
+      );
+    }
+
+
+    function formatBusinessHours(
+      hours
+    ) {
+      if (
+        !hours ||
+        hours.closed === true
+      ) {
+        return "CLOSED";
+      }
+
+      return (
+        `${formatBusinessClock(hours.open)} – ` +
+        `${formatBusinessClock(hours.close)}`
+      );
+    }
+
+
+    function formatBusinessDuration(
+      totalMinutes
+    ) {
+      const safeMinutes =
+        Math.max(
+          0,
+          Math.round(
+            totalMinutes
+          )
+        );
+
+      const hours =
+        Math.floor(
+          safeMinutes / 60
+        );
+
+      const minutes =
+        safeMinutes % 60;
+
+      if (hours === 0) {
+        return `${minutes} min`;
+      }
+
+      if (minutes === 0) {
+        return `${hours}h`;
+      }
+
+      return `${hours}h ${minutes}m`;
+    }
+
+
+    function getBusinessState(
+      date,
+      hours
+    ) {
+      if (
+        !hours ||
+        hours.closed === true
+      ) {
+        return {
+          id:
+            "closed",
+
+          label:
+            "Closed today",
+
+          detail:
+            "No regular business hours are scheduled today."
+        };
+      }
+
+      const nowMinutes =
+        date.getHours() *
+        60 +
+        date.getMinutes();
+
+      const openMinutes =
+        businessTimeToMinutes(
+          hours.open
+        );
+
+      const closeMinutes =
+        businessTimeToMinutes(
+          hours.close
+        );
+
+      if (
+        openMinutes === null ||
+        closeMinutes === null
+      ) {
+        return {
+          id:
+            "unknown",
+
+          label:
+            "Schedule unavailable",
+
+          detail:
+            "Business hours could not be evaluated."
+        };
+      }
+
+      if (
+        nowMinutes <
+        openMinutes
+      ) {
+        return {
+          id:
+            "before-open",
+
+          label:
+            "Before opening",
+
+          detail:
+            `Opens in ${formatBusinessDuration(openMinutes - nowMinutes)}.`
+        };
+      }
+
+      if (
+        nowMinutes <
+        closeMinutes
+      ) {
+        return {
+          id:
+            "open",
+
+          label:
+            "Open",
+
+          detail:
+            `Closes in ${formatBusinessDuration(closeMinutes - nowMinutes)}.`
+        };
+      }
+
+      return {
+        id:
+          "after-close",
+
+        label:
+          "Closed",
+
+        detail:
+          "Today’s business hours have ended."
+      };
+    }
+
+
+    function getNextBusinessProfileTransition(
+      date = new Date()
+    ) {
+      const currentYear =
+        date.getFullYear();
+
+      let transitionDate;
+      let nextProfile;
+
+      if (
+        isSummerBusinessDate(
+          date
+        )
+      ) {
+        transitionDate =
+          new Date(
+            currentYear,
+            8,
+            1,
+            0,
+            0,
+            0,
+            0
+          );
+
+        nextProfile =
+          BUSINESS_PROFILES.regular;
+
+      } else {
+        const monthDay =
+          (
+            date.getMonth() + 1
+          ) *
+          100 +
+          date.getDate();
+
+        const targetYear =
+          monthDay <= 622
+            ? currentYear
+            : currentYear + 1;
+
+        transitionDate =
+          new Date(
+            targetYear,
+            5,
+            23,
+            0,
+            0,
+            0,
+            0
+          );
+
+        nextProfile =
+          BUSINESS_PROFILES.summer;
+      }
+
+      const todayStart =
+        new Date(
+          date.getFullYear(),
+          date.getMonth(),
+          date.getDate()
+        );
+
+      const daysUntil =
+        Math.max(
+          0,
+          Math.ceil(
+            (
+              transitionDate.getTime() -
+              todayStart.getTime()
+            ) /
+            (
+              24 *
+              60 *
+              60 *
+              1000
+            )
+          )
+        );
+
+      return {
+        date:
+          transitionDate,
+
+        profile:
+          nextProfile,
+
+        daysUntil:
+          daysUntil
+      };
+    }
+
+
+    function hasSignageHolidayOverrideToday(
+      date = new Date()
+    ) {
+      if (
+        !Array.isArray(
+          holidayOverrides
+        ) ||
+        holidayOverrides.length === 0
+      ) {
+        return false;
+      }
+
+      const dateKey =
+        getBusinessDateKey(
+          date
+        );
+
+      return holidayOverrides.some(
+        item =>
+          item &&
+          item.status !== "invalid" &&
+          item.startDate &&
+          item.endDate &&
+          dateKey >= item.startDate &&
+          dateKey <= item.endDate
+      );
+    }
+
+
+
+    function getBusinessHoursForDate(
+      date
+    ) {
+      return getBusinessProfileForDate(
+        date
+      ).hours;
+    }
+
+
+    function getBusinessDateAtTime(
+      date,
+      hhmm
+    ) {
+      const minutes =
+        businessTimeToMinutes(
+          hhmm
+        );
+
+      if (minutes === null) {
+        return null;
+      }
+
+      return new Date(
+        date.getFullYear(),
+        date.getMonth(),
+        date.getDate(),
+        Math.floor(
+          minutes / 60
+        ),
+        minutes % 60,
+        0,
+        0
+      );
+    }
+
+
+    function getNextBusinessOpening(
+      date = new Date()
+    ) {
+      const todayHours =
+        getBusinessHoursForDate(
+          date
+        );
+
+      if (
+        todayHours &&
+        todayHours.closed !== true
+      ) {
+        const todayOpen =
+          getBusinessDateAtTime(
+            date,
+            todayHours.open
+          );
+
+        if (
+          todayOpen &&
+          date < todayOpen
+        ) {
+          return {
+            date:
+              todayOpen,
+
+            hours:
+              todayHours,
+
+            sameDay:
+              true
+          };
+        }
+      }
+
+      for (
+        let offset = 1;
+        offset <= 14;
+        offset += 1
+      ) {
+        const candidate =
+          new Date(
+            date.getFullYear(),
+            date.getMonth(),
+            date.getDate() + offset,
+            0,
+            0,
+            0,
+            0
+          );
+
+        const hours =
+          getBusinessHoursForDate(
+            candidate
+          );
+
+        if (
+          !hours ||
+          hours.closed === true
+        ) {
+          continue;
+        }
+
+        const opening =
+          getBusinessDateAtTime(
+            candidate,
+            hours.open
+          );
+
+        if (opening) {
+          return {
+            date:
+              opening,
+
+            hours:
+              hours,
+
+            sameDay:
+              false
+          };
+        }
+      }
+
+      return null;
+    }
+
+
+    function getNextBusinessClosing(
+      date = new Date()
+    ) {
+      const todayHours =
+        getBusinessHoursForDate(
+          date
+        );
+
+      if (
+        todayHours &&
+        todayHours.closed !== true
+      ) {
+        const todayClose =
+          getBusinessDateAtTime(
+            date,
+            todayHours.close
+          );
+
+        if (
+          todayClose &&
+          date < todayClose
+        ) {
+          return {
+            date:
+              todayClose,
+
+            hours:
+              todayHours,
+
+            sameDay:
+              true
+          };
+        }
+      }
+
+      const nextOpening =
+        getNextBusinessOpening(
+          date
+        );
+
+      if (!nextOpening) {
+        return null;
+      }
+
+      const nextHours =
+        getBusinessHoursForDate(
+          nextOpening.date
+        );
+
+      const closing =
+        nextHours &&
+        nextHours.closed !== true
+          ? getBusinessDateAtTime(
+              nextOpening.date,
+              nextHours.close
+            )
+          : null;
+
+      if (!closing) {
+        return null;
+      }
+
+      return {
+        date:
+          closing,
+
+        hours:
+          nextHours,
+
+        sameDay:
+          false
+      };
+    }
+
+
+    function formatBusinessEventDate(
+      targetDate,
+      referenceDate = new Date()
+    ) {
+      if (!targetDate) {
+        return "—";
+      }
+
+      const today =
+        new Date(
+          referenceDate.getFullYear(),
+          referenceDate.getMonth(),
+          referenceDate.getDate()
+        );
+
+      const tomorrow =
+        new Date(
+          today.getFullYear(),
+          today.getMonth(),
+          today.getDate() + 1
+        );
+
+      const targetDay =
+        new Date(
+          targetDate.getFullYear(),
+          targetDate.getMonth(),
+          targetDate.getDate()
+        );
+
+      let dayLabel;
+
+      if (
+        targetDay.getTime() ===
+        today.getTime()
+      ) {
+        dayLabel =
+          "Today";
+
+      } else if (
+        targetDay.getTime() ===
+        tomorrow.getTime()
+      ) {
+        dayLabel =
+          "Tomorrow";
+
+      } else {
+        dayLabel =
+          targetDate.toLocaleDateString(
+            undefined,
+            {
+              weekday:
+                "long",
+
+              month:
+                "short",
+
+              day:
+                "numeric"
+            }
+          );
+      }
+
+      return (
+        `${dayLabel} · ` +
+        `${formatBusinessClock(
+          `${String(targetDate.getHours()).padStart(2, "0")}:${String(targetDate.getMinutes()).padStart(2, "0")}`
+        )}`
+      );
+    }
+
+
+    function getBusinessEventCountdown(
+      targetDate,
+      referenceDate = new Date()
+    ) {
+      if (!targetDate) {
+        return "Unavailable";
+      }
+
+      const minutes =
+        Math.max(
+          0,
+          Math.round(
+            (
+              targetDate.getTime() -
+              referenceDate.getTime()
+            ) /
+            60000
+          )
+        );
+
+      const days =
+        Math.floor(
+          minutes / 1440
+        );
+
+      const remainingMinutes =
+        minutes % 1440;
+
+      const hours =
+        Math.floor(
+          remainingMinutes / 60
+        );
+
+      const mins =
+        remainingMinutes % 60;
+
+      if (days > 0) {
+        return (
+          `${days} day${days === 1 ? "" : "s"} ` +
+          `${hours}h`
+        );
+      }
+
+      return formatBusinessDuration(
+        remainingMinutes
+      );
+    }
+
+
+    /*
+     * =====================================================
+     * VERSION 1.3 — BUILD 109
+     * OPERATIONS SNAPSHOT + UI POLISH
+     * =====================================================
+     */
+
+    function renderOperationsSnapshot(
+      date = new Date()
+    ) {
+      const root =
+        document.getElementById(
+          "operationsSnapshot"
+        );
+
+      if (!root) {
+        return;
+      }
+
+      const profileResult =
+        getBusinessProfileForDate(
+          date
+        );
+
+      const operationalState =
+        getBusinessOperationalState(
+          date
+        );
+
+      const expectedNow =
+        getExpectedScreensNow(
+          date
+        );
+
+      const maintenance =
+        getMaintenanceScreens();
+
+      const profileEl =
+        document.getElementById(
+          "snapshotProfile"
+        );
+
+      const profileDetailEl =
+        document.getElementById(
+          "snapshotProfileDetail"
+        );
+
+      const storeEl =
+        document.getElementById(
+          "snapshotStoreState"
+        );
+
+      const storeDetailEl =
+        document.getElementById(
+          "snapshotStoreDetail"
+        );
+
+      const expectedEl =
+        document.getElementById(
+          "snapshotExpectedNow"
+        );
+
+      const expectedDetailEl =
+        document.getElementById(
+          "snapshotExpectedNowDetail"
+        );
+
+      const healthEl =
+        document.getElementById(
+          "snapshotHealth"
+        );
+
+      const healthDetailEl =
+        document.getElementById(
+          "snapshotHealthDetail"
+        );
+
+      const updatedEl =
+        document.getElementById(
+          "operationsSnapshotUpdated"
+        );
+
+      if (profileEl) {
+        profileEl.textContent =
+          `${profileResult.profile.icon} ${profileResult.profile.label}`;
+      }
+
+      if (profileDetailEl) {
+        profileDetailEl.textContent =
+          profileResult.profile.rangeLabel;
+      }
+
+      if (storeEl) {
+        storeEl.textContent =
+          operationalState.operatingToday
+            ? operationalState.openNow
+              ? "🟢 Open"
+              : operationalState.state.id === "before-open"
+                ? "🟡 Before opening"
+                : "⚫ Closed"
+            : "⚫ Closed today";
+      }
+
+      if (storeDetailEl) {
+        storeDetailEl.textContent =
+          formatBusinessHours(
+            operationalState.hours
+          );
+      }
+
+      if (expectedEl) {
+        expectedEl.textContent =
+          String(
+            expectedNow.length
+          );
+      }
+
+      if (expectedDetailEl) {
+        if (expectedNow.length) {
+          expectedDetailEl.textContent =
+            expectedNow.join(
+              ", "
+            );
+        } else if (
+          operationalState.operatingToday
+        ) {
+          expectedDetailEl.textContent =
+            "Intentionally inactive outside business hours";
+        } else {
+          expectedDetailEl.textContent =
+            "No players expected today";
+        }
+
+        if (
+          maintenanceModeEnabled &&
+          maintenance.length > 0
+        ) {
+          expectedDetailEl.textContent +=
+            ` · ${maintenance.length} maintenance exclusion${maintenance.length === 1 ? "" : "s"}`;
+        }
+      }
+
+      const score =
+        latestHealthScoreResult &&
+        Number.isFinite(
+          Number(
+            latestHealthScoreResult.score
+          )
+        )
+          ? Number(
+              latestHealthScoreResult.score
+            )
+          : null;
+
+      if (healthEl) {
+        healthEl.textContent =
+          score === null
+            ? "—"
+            : `${Math.round(score)}/100`;
+      }
+
+      if (healthDetailEl) {
+        healthDetailEl.textContent =
+          score === null
+            ? "Waiting for System Health"
+            : score >= 95
+              ? "Strong operational health"
+              : score >= 85
+                ? "Stable with minor observations"
+                : "Review System Health";
+      }
+
+      if (updatedEl) {
+        updatedEl.textContent =
+          `Updated ${date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+      }
+
+      root.classList.toggle(
+        "operations-snapshot-open",
+        operationalState.openNow
+      );
+
+      root.classList.toggle(
+        "operations-snapshot-closed",
+        !operationalState.openNow
+      );
+    }
+
+
+    function renderBusinessProfile(
+      date = new Date()
+    ) {
+      const panel =
+        document.getElementById(
+          "businessProfilePanel"
+        );
+
+      if (!panel) {
+        return;
+      }
+
+      const result =
+        getBusinessProfileForDate(
+          date
+        );
+
+      const state =
+        getBusinessState(
+          date,
+          result.hours
+        );
+
+      const next =
+        getNextBusinessProfileTransition(
+          date
+        );
+
+      const dayName =
+        date.toLocaleDateString(
+          undefined,
+          {
+            weekday:
+              "long"
+          }
+        );
+
+      const nextDate =
+        next.date.toLocaleDateString(
+          undefined,
+          {
+            month:
+              "short",
+
+            day:
+              "numeric",
+
+            year:
+              next.date.getFullYear() !==
+              date.getFullYear()
+                ? "numeric"
+                : undefined
+          }
+        );
+
+      panel.className =
+        `business-profile-panel ` +
+        `business-profile-${result.profile.id} ` +
+        `business-state-${state.id}`;
+
+      document.getElementById(
+        "businessProfileIcon"
+      ).textContent =
+        result.profile.icon;
+
+      document.getElementById(
+        "businessProfileTitle"
+      ).textContent =
+        `${result.profile.label} Business Profile`;
+
+      document.getElementById(
+        "businessProfileBadge"
+      ).textContent =
+        state.label;
+
+      document.getElementById(
+        "businessProfileBadge"
+      ).className =
+        `business-profile-badge ` +
+        `business-profile-badge-${state.id}`;
+
+      document.getElementById(
+        "businessProfileName"
+      ).textContent =
+        result.profile.label;
+
+      document.getElementById(
+        "businessProfileSeasonRange"
+      ).textContent =
+        result.profile.rangeLabel;
+
+      document.getElementById(
+        "businessProfileHours"
+      ).textContent =
+        formatBusinessHours(
+          result.hours
+        );
+
+      document.getElementById(
+        "businessProfileDay"
+      ).textContent =
+        dayName;
+
+      document.getElementById(
+        "businessProfileState"
+      ).textContent =
+        state.label;
+
+      document.getElementById(
+        "businessProfileStateDetail"
+      ).textContent =
+        state.detail;
+
+      const nextOpening =
+        getNextBusinessOpening(
+          date
+        );
+
+      const nextClosing =
+        getNextBusinessClosing(
+          date
+        );
+
+      document.getElementById(
+        "businessNextOpening"
+      ).textContent =
+        nextOpening
+          ? formatBusinessEventDate(
+              nextOpening.date,
+              date
+            )
+          : "Unavailable";
+
+      document.getElementById(
+        "businessNextOpeningDetail"
+      ).textContent =
+        nextOpening
+          ? `In ${getBusinessEventCountdown(nextOpening.date, date)}`
+          : "No opening found in the next two weeks.";
+
+      document.getElementById(
+        "businessNextClosing"
+      ).textContent =
+        nextClosing
+          ? formatBusinessEventDate(
+              nextClosing.date,
+              date
+            )
+          : "Unavailable";
+
+      document.getElementById(
+        "businessNextClosingDetail"
+      ).textContent =
+        nextClosing
+          ? `In ${getBusinessEventCountdown(nextClosing.date, date)}`
+          : "No closing found in the next two weeks.";
+
+      document.getElementById(
+        "businessProfileNext"
+      ).textContent =
+        next.profile.label;
+
+      document.getElementById(
+        "businessProfileNextDetail"
+      ).textContent =
+        `${nextDate} · ${next.daysUntil} day${next.daysUntil === 1 ? "" : "s"}`;
+
+      const summary =
+        result.hours &&
+        result.hours.closed === true
+          ? `${dayName} is closed under the ${result.profile.label} profile.`
+          : `${dayName}: ${formatBusinessHours(result.hours)}. ${state.detail}`;
+
+      document.getElementById(
+        "businessProfileSummary"
+      ).textContent =
+        summary;
+
+      const specialNotice =
+        document.getElementById(
+          "businessProfileSpecialNotice"
+        );
+
+      if (result.special) {
+        specialNotice.className =
+          "business-profile-special-notice active";
+
+        specialNotice.textContent =
+          `🎉 Special business-hours override active: ${result.profile.label}.`;
+
+      } else if (
+        hasSignageHolidayOverrideToday(
+          date
+        )
+      ) {
+        specialNotice.className =
+          "business-profile-special-notice detected";
+
+        specialNotice.textContent =
+          "🎄 Signage Holiday Override detected today. Build 101 keeps business hours on the seasonal profile until official special-day hours are configured.";
+
+      } else {
+        specialNotice.className =
+          "business-profile-special-notice";
+
+        specialNotice.textContent =
+          "Special / Holiday business-hours override: none configured.";
+      }
+    }
+
+
     const PLAYER_VERSION_MEMORY_KEY =
       "miniGolfPlayerVersionMemoryV2";
 
@@ -95,27 +1356,559 @@
     let playerHeartbeatMemory =
       {};
 
+    /*
+     * =====================================================
+     * VERSION 1.3 — BUILD 104
+     * MAINTENANCE MODE
+     * =====================================================
+     */
+
+    const MAINTENANCE_MODE_STORAGE_KEY =
+      "miniGolfDashboardMaintenanceModeV13";
+
+    let maintenanceModeEnabled =
+      false;
+
+    const maintenanceScreens =
+      new Set();
+
+
+    function readMaintenanceModeState() {
+      try {
+        const raw =
+          localStorage.getItem(
+            MAINTENANCE_MODE_STORAGE_KEY
+          );
+
+        if (!raw) {
+          return;
+        }
+
+        const parsed =
+          JSON.parse(
+            raw
+          );
+
+        maintenanceModeEnabled =
+          parsed &&
+          parsed.enabled === true;
+
+        maintenanceScreens.clear();
+
+        if (
+          parsed &&
+          Array.isArray(
+            parsed.screens
+          )
+        ) {
+          parsed.screens
+            .filter(screenName =>
+              SCREEN_NAMES.includes(
+                screenName
+              )
+            )
+            .forEach(screenName =>
+              maintenanceScreens.add(
+                screenName
+              )
+            );
+        }
+
+      } catch (error) {
+        console.warn(
+          "Maintenance Mode state could not be restored.",
+          error
+        );
+
+        maintenanceModeEnabled =
+          false;
+
+        maintenanceScreens.clear();
+      }
+    }
+
+
+    function persistMaintenanceModeState() {
+      try {
+        localStorage.setItem(
+          MAINTENANCE_MODE_STORAGE_KEY,
+          JSON.stringify({
+            enabled:
+              maintenanceModeEnabled,
+
+            screens:
+              Array.from(
+                maintenanceScreens
+              )
+          })
+        );
+
+      } catch (error) {
+        console.warn(
+          "Maintenance Mode state could not be saved.",
+          error
+        );
+      }
+    }
+
+
+    function isScreenInMaintenance(
+      screenName
+    ) {
+      return (
+        maintenanceModeEnabled &&
+        maintenanceScreens.has(
+          screenName
+        )
+      );
+    }
+
+
+    function getMaintenanceScreens() {
+      if (!maintenanceModeEnabled) {
+        return [];
+      }
+
+      return SCREEN_NAMES.filter(
+        screenName =>
+          maintenanceScreens.has(
+            screenName
+          )
+      );
+    }
+
+
+    function renderMaintenanceMode() {
+      const list =
+        document.getElementById(
+          "maintenanceScreenList"
+        );
+
+      const toggle =
+        document.getElementById(
+          "maintenanceModeToggle"
+        );
+
+      const status =
+        document.getElementById(
+          "maintenanceModeStatus"
+        );
+
+      const notice =
+        document.getElementById(
+          "maintenanceModeNotice"
+        );
+
+      const panel =
+        document.getElementById(
+          "maintenanceModePanel"
+        );
+
+      if (
+        !list ||
+        !toggle ||
+        !status ||
+        !notice ||
+        !panel
+      ) {
+        return;
+      }
+
+      list.innerHTML =
+        SCREEN_NAMES
+          .map(screenName => {
+            const selected =
+              maintenanceScreens.has(
+                screenName
+              );
+
+            return `
+              <label class="maintenance-screen-option ${selected ? "selected" : ""}">
+                <input
+                  type="checkbox"
+                  data-maintenance-screen="${escapeHtml(screenName)}"
+                  ${selected ? "checked" : ""}
+                >
+                <span>${escapeHtml(screenName)}</span>
+              </label>
+            `;
+          })
+          .join("");
+
+      toggle.setAttribute(
+        "aria-pressed",
+        maintenanceModeEnabled
+          ? "true"
+          : "false"
+      );
+
+      toggle.textContent =
+        maintenanceModeEnabled
+          ? "Disable Maintenance Mode"
+          : "Enable Maintenance Mode";
+
+      toggle.classList.toggle(
+        "button-primary",
+        maintenanceModeEnabled
+      );
+
+      panel.classList.toggle(
+        "active",
+        maintenanceModeEnabled
+      );
+
+      const selectedCount =
+        maintenanceScreens.size;
+
+      const excludedCount =
+        getMaintenanceScreens()
+          .length;
+
+      status.textContent =
+        maintenanceModeEnabled
+          ? `${excludedCount} player${excludedCount === 1 ? "" : "s"} excluded`
+          : `Disabled · ${selectedCount} selected`;
+
+      if (
+        maintenanceModeEnabled &&
+        excludedCount === 0
+      ) {
+        notice.className =
+          "maintenance-mode-notice warning";
+
+        notice.textContent =
+          "Maintenance Mode is enabled, but no players are selected. Operational expectations remain unchanged.";
+
+      } else if (
+        maintenanceModeEnabled
+      ) {
+        notice.className =
+          "maintenance-mode-notice active";
+
+        notice.textContent =
+          `Expected-player checks currently ignore: ${getMaintenanceScreens().join(", ")}.`;
+
+      } else {
+        notice.className =
+          "maintenance-mode-notice";
+
+        notice.textContent =
+          "Maintenance Mode is stored only in this browser and can be disabled at any time.";
+      }
+    }
+
+
+    function refreshMaintenanceAwareUi() {
+      renderMaintenanceMode();
+      renderRolloutAssistant();
+      runGoLiveReadinessCheck();
+
+      if (latestHealthScoreResult) {
+        renderHealthScore(
+          latestHealthScoreResult
+        );
+      }
+
+      scheduleOperationsCenterRender({
+        immediate: true,
+        sampleAnalytics: true
+      });
+    }
+
+
+    function setupMaintenanceMode() {
+      readMaintenanceModeState();
+
+      const list =
+        document.getElementById(
+          "maintenanceScreenList"
+        );
+
+      const toggle =
+        document.getElementById(
+          "maintenanceModeToggle"
+        );
+
+      const selectAll =
+        document.getElementById(
+          "maintenanceSelectAllButton"
+        );
+
+      const clear =
+        document.getElementById(
+          "maintenanceClearButton"
+        );
+
+      if (
+        !list ||
+        !toggle ||
+        !selectAll ||
+        !clear
+      ) {
+        return;
+      }
+
+      toggle.addEventListener(
+        "click",
+        function() {
+          maintenanceModeEnabled =
+            !maintenanceModeEnabled;
+
+          persistMaintenanceModeState();
+          refreshMaintenanceAwareUi();
+        }
+      );
+
+      selectAll.addEventListener(
+        "click",
+        function() {
+          maintenanceScreens.clear();
+
+          SCREEN_NAMES.forEach(
+            screenName =>
+              maintenanceScreens.add(
+                screenName
+              )
+          );
+
+          persistMaintenanceModeState();
+          refreshMaintenanceAwareUi();
+        }
+      );
+
+      clear.addEventListener(
+        "click",
+        function() {
+          maintenanceScreens.clear();
+
+          persistMaintenanceModeState();
+          refreshMaintenanceAwareUi();
+        }
+      );
+
+      list.addEventListener(
+        "change",
+        function(event) {
+          const input =
+            event.target.closest(
+              "[data-maintenance-screen]"
+            );
+
+          if (!input) {
+            return;
+          }
+
+          const screenName =
+            input.dataset
+              .maintenanceScreen;
+
+          if (
+            !SCREEN_NAMES.includes(
+              screenName
+            )
+          ) {
+            return;
+          }
+
+          if (input.checked) {
+            maintenanceScreens.add(
+              screenName
+            );
+
+          } else {
+            maintenanceScreens.delete(
+              screenName
+            );
+          }
+
+          persistMaintenanceModeState();
+          refreshMaintenanceAwareUi();
+        }
+      );
+
+      renderMaintenanceMode();
+    }
+
+
+    /*
+     * =====================================================
+     * VERSION 1.3 — BUILD 103
+     * BUSINESS-AWARE SCREEN EXPECTATIONS
+     * =====================================================
+     */
+
+    function isBusinessOperatingToday(
+      date = new Date()
+    ) {
+      const result =
+        getBusinessProfileForDate(
+          date
+        );
+
+      return Boolean(
+        result &&
+        result.hours &&
+        result.hours.closed !== true
+      );
+    }
+
+
+    function isBusinessOpenNow(
+      date = new Date()
+    ) {
+      const result =
+        getBusinessProfileForDate(
+          date
+        );
+
+      const state =
+        getBusinessState(
+          date,
+          result.hours
+        );
+
+      return state.id === "open";
+    }
+
+
+    function getBusinessOperationalState(
+      date = new Date()
+    ) {
+      const result =
+        getBusinessProfileForDate(
+          date
+        );
+
+      const state =
+        getBusinessState(
+          date,
+          result.hours
+        );
+
+      return {
+        profile:
+          result.profile,
+
+        hours:
+          result.hours,
+
+        state:
+          state,
+
+        operatingToday:
+          Boolean(
+            result.hours &&
+            result.hours.closed !== true
+          ),
+
+        openNow:
+          state.id === "open"
+      };
+    }
+
+
+    function isScreenDayVariantExpected(
+      screenName,
+      date = new Date()
+    ) {
+      /*
+       * Build 111 exposes four stable logical players.
+       * Weekday/season schedule variation is resolved by
+       * Apps Script, not by separate player identities.
+       */
+      return SCREEN_NAMES.includes(
+        screenName
+      );
+    }
+
+
     function isScreenExpectedToday(
       screenName,
       date = new Date()
     ) {
-      const day =
-        date.getDay();
-
-      if (screenName === "ArcadeSunday") {
-        return day === 0;
+      if (
+        !isBusinessOperatingToday(
+          date
+        )
+      ) {
+        return false;
       }
 
-      if (screenName === "ArcadeWeek") {
-        return day >= 1 && day <= 4;
+      if (
+        isScreenInMaintenance(
+          screenName
+        )
+      ) {
+        return false;
       }
 
-      if (screenName === "Arcade") {
-        return day === 5 || day === 6;
-      }
-
-      return true;
+      return isScreenDayVariantExpected(
+        screenName,
+        date
+      );
     }
+
+
+    function isScreenExpectedNow(
+      screenName,
+      date = new Date()
+    ) {
+      return (
+        isScreenExpectedToday(
+          screenName,
+          date
+        ) &&
+        isBusinessOpenNow(
+          date
+        )
+      );
+    }
+
+
+    function getExpectedScreensToday(
+      date = new Date()
+    ) {
+      return SCREEN_NAMES.filter(
+        screenName =>
+          isScreenExpectedToday(
+            screenName,
+            date
+          )
+      );
+    }
+
+
+    function getExpectedScreensNow(
+      date = new Date()
+    ) {
+      return SCREEN_NAMES.filter(
+        screenName =>
+          isScreenExpectedNow(
+            screenName,
+            date
+          )
+      );
+    }
+
+
+    function getIntentionallyInactiveScreens(
+      date = new Date()
+    ) {
+      const expectedNow =
+        new Set(
+          getExpectedScreensNow(
+            date
+          )
+        );
+
+      return SCREEN_NAMES.filter(
+        screenName =>
+          !expectedNow.has(
+            screenName
+          )
+      );
+    }
+
 
     function loadPlayerHeartbeatMemory() {
       try {
@@ -536,6 +2329,11 @@
 
             expectedToday:
               isScreenExpectedToday(
+                screenName
+              ),
+
+            expectedNow:
+              isScreenExpectedNow(
                 screenName
               )
           };
@@ -1913,6 +3711,11 @@
         "rolloutAssistantList"
       );
 
+    const rolloutRecommendationSummary =
+      document.getElementById(
+        "rolloutRecommendationSummary"
+      );
+
 
     const rolloutBulkSelectedCount =
       document.getElementById(
@@ -2020,6 +3823,31 @@
     const goLiveReadinessList =
       document.getElementById(
         "goLiveReadinessList"
+      );
+
+    const goLivePreflightProgress =
+      document.getElementById(
+        "goLivePreflightProgress"
+      );
+
+    const goLivePreflightProgressBar =
+      document.getElementById(
+        "goLivePreflightProgressBar"
+      );
+
+    const goLivePreflightProgressText =
+      document.getElementById(
+        "goLivePreflightProgressText"
+      );
+
+    const goLivePreflightLastRun =
+      document.getElementById(
+        "goLivePreflightLastRun"
+      );
+
+    const goLivePreflightFooter =
+      document.getElementById(
+        "goLivePreflightFooter"
       );
 
     const healthScoreNumber =
@@ -3166,6 +4994,37 @@
 
         activeDate:
           payload.activeDate || "",
+
+        logicalScreen:
+          String(
+            payload.logicalScreen ||
+            screenName
+          ),
+
+        routeProfile:
+          String(
+            payload.routeProfile || ""
+          ),
+
+        routeKey:
+          String(
+            payload.routeKey || ""
+          ),
+
+        routeSourceTab:
+          String(
+            payload.routeSourceTab || ""
+          ),
+
+        routeLabel:
+          String(
+            payload.routeLabel || ""
+          ),
+
+        legacyRequest:
+          String(
+            payload.legacyRequest || ""
+          ),
 
         schedule,
         activeItem,
@@ -7159,6 +9018,8 @@
 
             holidayOverrides =
               payload.overrides;
+
+            renderBusinessProfile();
 
             offlineSections.delete(
               "holiday"
@@ -13384,13 +15245,30 @@
         76;
 
       /*
-       * The calendar has one fixed time column and six equal
-       * screen columns. Calculate the exact pixel width after
-       * the grid has rendered.
+       * Build 111.1: the calendar follows the current logical
+       * player list dynamically. Build 111 reduced the system
+       * from six player identities to four logical players, so
+       * the grid must no longer reserve six screen columns.
        */
+      const minimumScreenColumnWidth =
+        190;
+
+      const minimumCalendarWidth =
+        timeColumnWidth +
+        SCREEN_NAMES.length *
+          minimumScreenColumnWidth;
+
+      dailyCalendarGrid.style.gridTemplateColumns =
+        `${timeColumnWidth}px repeat(${SCREEN_NAMES.length}, minmax(${minimumScreenColumnWidth}px, 1fr))`;
+
+      dailyCalendarGrid.style.minWidth =
+        `${minimumCalendarWidth}px`;
+
       const calendarWidth =
-        dailyCalendarGrid.clientWidth ||
-        1100;
+        Math.max(
+          dailyCalendarGrid.clientWidth || 0,
+          minimumCalendarWidth
+        );
 
       const screenColumnWidth =
         (
@@ -13411,9 +15289,13 @@
         `<div class="daily-calendar-corner">Time</div>`;
 
       SCREEN_NAMES.forEach(
-        screenName => {
+        (screenName, screenIndex) => {
+          const isLastScreen =
+            screenIndex ===
+            SCREEN_NAMES.length - 1;
+
           html += `
-            <div class="daily-calendar-screen-header">
+            <div class="daily-calendar-screen-header${isLastScreen ? " daily-calendar-grid-edge" : ""}">
               ${escapeHtml(screenName)}
             </div>
           `;
@@ -13432,10 +15314,14 @@
         `;
 
         SCREEN_NAMES.forEach(
-          screenName => {
+          (screenName, screenIndex) => {
+            const isLastScreen =
+              screenIndex ===
+              SCREEN_NAMES.length - 1;
+
             html += `
               <div
-                class="daily-calendar-cell"
+                class="daily-calendar-cell${isLastScreen ? " daily-calendar-grid-edge" : ""}"
                 data-daily-cell-screen="${escapeHtml(screenName)}"
                 data-daily-cell-hour="${hour}"
               ></div>
@@ -13978,6 +15864,13 @@
 
 
     function scrollDailyCalendarToNow() {
+      if (
+        !dailyCalendarWrap ||
+        !dailyCalendarGrid
+      ) {
+        return;
+      }
+
       const startHour =
         Number(
           dailyCalendarStartHour.value
@@ -13993,22 +15886,68 @@
       const startMinute =
         startHour * 60;
 
-      const offset =
-        Math.max(
-          0,
-          (
-            (
-              currentMinute -
-              startMinute
-            ) /
-            60
-          ) *
-          48 -
-          120
+      /*
+       * Build 112.1:
+       * Read the actual rendered hour height instead of using
+       * the old fixed 48px assumption.
+       */
+      const firstTimeCell =
+        dailyCalendarGrid.querySelector(
+          ".daily-calendar-time"
         );
 
-      dailyCalendarWrap.scrollTop =
-        offset;
+      const hourHeight =
+        firstTimeCell
+          ? firstTimeCell.getBoundingClientRect().height
+          : 48;
+
+      const minutesFromStart =
+        Math.max(
+          0,
+          currentMinute -
+          startMinute
+        );
+
+      const targetY =
+        minutesFromStart /
+        60 *
+        hourHeight;
+
+      const centeredTarget =
+        targetY -
+        dailyCalendarWrap.clientHeight *
+          0.42;
+
+      const maxScrollTop =
+        Math.max(
+          0,
+          dailyCalendarWrap.scrollHeight -
+          dailyCalendarWrap.clientHeight
+        );
+
+      const nextScrollTop =
+        Math.min(
+          maxScrollTop,
+          Math.max(
+            0,
+            centeredTarget
+          )
+        );
+
+      const prefersReducedMotion =
+        window.matchMedia(
+          "(prefers-reduced-motion: reduce)"
+        ).matches;
+
+      dailyCalendarWrap.scrollTo({
+        top:
+          nextScrollTop,
+
+        behavior:
+          prefersReducedMotion
+            ? "auto"
+            : "smooth"
+      });
     }
 
 
@@ -14661,21 +16600,7 @@
       refreshGoLiveReadinessButton.addEventListener(
         "click",
         function() {
-          refreshGoLiveReadinessButton.disabled =
-            true;
-
-          refreshGoLiveReadinessButton.textContent =
-            "Checking…";
-
-          try {
-            runGoLiveReadinessCheck();
-          } finally {
-            refreshGoLiveReadinessButton.disabled =
-              false;
-
-            refreshGoLiveReadinessButton.textContent =
-              "Run preflight";
-          }
+          runFunctionalGoLivePreflight();
         }
       );
 
@@ -15034,6 +16959,9 @@
 
       latestHealthScoreResult =
         scoreResult;
+
+      renderOperationsSnapshot();
+      recordOperationsAnalyticsSample();
 
       const state =
         scoreResult.state;
@@ -16449,6 +18377,22 @@
           payload.players
         );
 
+        markAnalyticsHeartbeatSnapshotReady();
+
+        /*
+         * If the first Health-only startup sample already used
+         * the five-minute sample slot, allow the first valid
+         * heartbeat-backed uptime sample immediately.
+         */
+        if (
+          getExpectedScreensNow().length > 0
+        ) {
+          lastOperationsAnalyticsSampleAt =
+            0;
+
+          recordOperationsAnalyticsSample();
+        }
+
         runGoLiveReadinessCheck();
         renderRolloutAssistant();
         renderOperationsIntelligence();
@@ -16460,6 +18404,9 @@
           "Live heartbeat request failed; using last-known player state.",
           error
         );
+
+        analyticsHeartbeatSnapshotReady =
+          false;
 
         renderPlayerHeartbeats(
           []
@@ -16516,13 +18463,17 @@
     }
 
 
-    function isPlayerQuietHours() {
-      const hour =
-        new Date().getHours();
-
-      return (
-        hour >= 22 ||
-        hour < 10
+    function isPlayerQuietHours(
+      date = new Date()
+    ) {
+      /*
+       * Build 103 keeps the legacy function name because many
+       * existing dashboard components call it. Its meaning is
+       * now business-aware: players are in an expected sleep
+       * window whenever the business is not currently open.
+       */
+      return !isBusinessOpenNow(
+        date
       );
     }
 
@@ -16580,18 +18531,85 @@
     let build89Phase3ReactiveRenderTimer = null;
     const BUILD89_PHASE3_HEALTH_REFRESH_MS = 60 * 1000;
 
+    /*
+     * =====================================================
+     * VERSION 1.3 — BUILD 110
+     * STABILITY + RENDER OPTIMIZATION
+     * =====================================================
+     *
+     * Coalesce cosmetic/reactive renders into one browser frame.
+     * Data refresh cadence is unchanged.
+     */
+
+    let operationsCenterRenderFrame = null;
+    let operationsCenterRenderPendingAnalyticsSample = false;
+
+
+    function scheduleOperationsCenterRender(
+      options = {}
+    ) {
+      if (
+        options.sampleAnalytics === true
+      ) {
+        operationsCenterRenderPendingAnalyticsSample = true;
+      }
+
+      if (operationsCenterRenderFrame !== null) {
+        return;
+      }
+
+      const run = function() {
+        operationsCenterRenderFrame = null;
+
+        renderOperationsSnapshot();
+        renderBusinessProfile();
+        renderScreenIntelligence();
+        renderScheduleRouting();
+        renderOperationsIntelligence();
+        renderMissionControlStatuses();
+
+        if (
+          operationsCenterRenderPendingAnalyticsSample
+        ) {
+          operationsCenterRenderPendingAnalyticsSample = false;
+          recordOperationsAnalyticsSample();
+        }
+      };
+
+      if (
+        options.immediate === true ||
+        typeof window.requestAnimationFrame !== "function"
+      ) {
+        run();
+        return;
+      }
+
+      operationsCenterRenderFrame =
+        window.requestAnimationFrame(
+          run
+        );
+    }
+
+
     function scheduleBuild89Phase3ReactiveRender(options = {}) {
       window.clearTimeout(build89Phase3ReactiveRenderTimer);
 
       build89Phase3ReactiveRenderTimer = window.setTimeout(function() {
         if (latestHealthScoreResult) {
-          renderHealthScore(latestHealthScoreResult);
+          renderHealthScore(
+            latestHealthScoreResult
+          );
         }
 
-        runGoLiveReadinessCheck();
         renderRolloutAssistant();
-        renderOperationsIntelligence();
-        renderMissionControlStatuses();
+
+        scheduleOperationsCenterRender({
+          immediate:
+            options.immediate === true,
+          sampleAnalytics:
+            true
+        });
+
         renderMissionRecentActivity();
         renderNotificationCenter();
       }, options.immediate === true ? 0 : 120);
@@ -16670,8 +18688,19 @@
 
       if (!isScreenExpectedToday(player.screen)) {
         return {
-          label: "Not scheduled",
-          detail: "Excluded from today's version compliance check."
+          label:
+            isScreenInMaintenance(
+              player.screen
+            )
+              ? "Maintenance"
+              : "Not scheduled",
+
+          detail:
+            isScreenInMaintenance(
+              player.screen
+            )
+              ? "Temporarily excluded by Maintenance Mode."
+              : "Excluded from today's version compliance check."
         };
       }
 
@@ -16762,7 +18791,14 @@
       const events = build89Phase2PlayerEvents.get(player.screen) || [];
 
       title.textContent = player.screen;
-      eyebrow.textContent = expectedToday ? "Scheduled player" : "Not scheduled today";
+      eyebrow.textContent =
+        expectedToday
+          ? "Scheduled player"
+          : isScreenInMaintenance(
+              player.screen
+            )
+            ? "Maintenance Mode"
+            : "Not scheduled today";
       build89DrawerReturnToList = true;
       setBuild89DrawerBackButton(true);
 
@@ -16791,7 +18827,13 @@
 
           <div class="player-details-field">
             <span class="player-details-field-label">Expected today</span>
-            <span class="player-details-field-value">${expectedToday ? "Yes" : "No"}</span>
+            <span class="player-details-field-value">${
+              isScreenInMaintenance(player.screen)
+                ? "Maintenance"
+                : expectedToday
+                  ? "Yes"
+                  : "No"
+            }</span>
           </div>
 
           <div class="player-details-field full">
@@ -17303,6 +19345,364 @@
       animateDashboardNumber(deploymentElement, deployedCount, { suffix: `/${SCREEN_NAMES.length}` });
     }
 
+    function renderScheduleRouting(
+      date = new Date()
+    ) {
+      const list =
+        document.getElementById(
+          "scheduleRoutingList"
+        );
+
+      const badge =
+        document.getElementById(
+          "scheduleRoutingProfileBadge"
+        );
+
+      if (
+        !list ||
+        !badge
+      ) {
+        return;
+      }
+
+      const profile =
+        getSeasonalBusinessProfile(
+          date
+        );
+
+      badge.textContent =
+        profile.label;
+
+      const rows =
+        SCREEN_NAMES.map(
+          screenName => {
+            const state =
+              screenStates.get(
+                screenName
+              );
+
+            if (
+              !state ||
+              state.error
+            ) {
+              return {
+                screenName:
+                  screenName,
+
+                source:
+                  "Waiting for Apps Script",
+
+                detail:
+                  state &&
+                  state.error
+                    ? state.error
+                    : "No route data yet.",
+
+                status:
+                  "waiting"
+              };
+            }
+
+            const source =
+              state.source === "holiday"
+                ? "Holiday Override"
+                : state.routeSourceTab ||
+                  "Unknown source";
+
+            const detailParts =
+              [];
+
+            if (state.routeLabel) {
+              detailParts.push(
+                state.routeLabel
+              );
+            }
+
+            if (
+              state.source === "holiday"
+            ) {
+              detailParts.push(
+                "Special/Holiday override has priority"
+              );
+            }
+
+            return {
+              screenName:
+                screenName,
+
+              source:
+                source,
+
+              detail:
+                detailParts.join(
+                  " · "
+                ) ||
+                `${profile.label} route`,
+
+              status:
+                "ready"
+            };
+          }
+        );
+
+      list.innerHTML =
+        rows
+          .map(row => `
+            <article class="schedule-routing-item schedule-routing-item-${row.status}">
+              <div class="schedule-routing-screen">
+                ${escapeHtml(row.screenName)}
+              </div>
+
+              <div class="schedule-routing-arrow" aria-hidden="true">
+                →
+              </div>
+
+              <div class="schedule-routing-source">
+                <strong>${escapeHtml(row.source)}</strong>
+                <small>${escapeHtml(row.detail)}</small>
+              </div>
+            </article>
+          `)
+          .join("");
+    }
+
+
+    function renderScreenIntelligence(
+      date = new Date()
+    ) {
+      const panel =
+        document.getElementById(
+          "screenIntelligencePanel"
+        );
+
+      if (!panel) {
+        return;
+      }
+
+      const operationalState =
+        getBusinessOperationalState(
+          date
+        );
+
+      const expectedToday =
+        getExpectedScreensToday(
+          date
+        );
+
+      const expectedNow =
+        getExpectedScreensNow(
+          date
+        );
+
+      const inactive =
+        getIntentionallyInactiveScreens(
+          date
+        );
+
+      const maintenance =
+        getMaintenanceScreens();
+
+      const expectedTodayText =
+        expectedToday.length
+          ? expectedToday.join(", ")
+          : "None";
+
+      const expectedNowText =
+        expectedNow.length
+          ? expectedNow.join(", ")
+          : "None";
+
+      const inactiveText =
+        inactive.length
+          ? inactive.join(", ")
+          : "None";
+
+      let state =
+        "ready";
+
+      let badge =
+        "Business aware";
+
+      let icon =
+        "🖥️";
+
+      let title =
+        "Screen expectations active";
+
+      let summary =
+        `${expectedNow.length} player${expectedNow.length === 1 ? "" : "s"} expected right now.`;
+
+      let notice =
+        "Offline states are actionable only for players expected during the current business window.";
+
+      if (
+        maintenanceModeEnabled &&
+        maintenance.length > 0
+      ) {
+        notice =
+          `Maintenance Mode excludes ${maintenance.join(", ")} from operational expectations.`;
+      }
+
+      if (!operationalState.operatingToday) {
+        state =
+          "closed";
+
+        badge =
+          "Closed today";
+
+        icon =
+          "🏢";
+
+        title =
+          "All screens intentionally inactive";
+
+        summary =
+          "The active business profile marks today as closed.";
+
+        notice =
+          "No player is expected today. Offline heartbeats should not be treated as an operational fault.";
+
+      } else if (!operationalState.openNow) {
+        state =
+          "sleeping";
+
+        badge =
+          operationalState.state.id === "before-open"
+            ? "Before opening"
+            : "After closing";
+
+        icon =
+          "🌙";
+
+        title =
+          "Screens intentionally sleeping";
+
+        summary =
+          `${expectedToday.length} player${expectedToday.length === 1 ? "" : "s"} scheduled today, but none are required right now.`;
+
+        notice =
+          maintenanceModeEnabled &&
+          maintenance.length > 0
+            ? `${operationalState.state.detail} Maintenance exclusions: ${maintenance.join(", ")}.`
+            : operationalState.state.detail;
+
+      } else {
+        const livePlayers =
+          Array.isArray(
+            latestPlayerHeartbeats
+          )
+            ? latestPlayerHeartbeats
+            : [];
+
+        const expectedSet =
+          new Set(
+            expectedNow
+          );
+
+        const onlineCount =
+          livePlayers.filter(
+            player =>
+              expectedSet.has(
+                player.screen
+              ) &&
+              player.status === "online"
+          ).length;
+
+        if (
+          expectedNow.length > 0 &&
+          onlineCount <
+            expectedNow.length
+        ) {
+          state =
+            "attention";
+
+          badge =
+            "Check players";
+
+          icon =
+            "🟠";
+
+          title =
+            "Some expected screens need attention";
+
+          summary =
+            `${onlineCount} of ${expectedNow.length} expected players are currently online.`;
+        }
+      }
+
+      panel.className =
+        `screen-intelligence-panel ` +
+        `screen-intelligence-${state}`;
+
+      document.getElementById(
+        "screenIntelligenceBadge"
+      ).className =
+        `screen-intelligence-badge ` +
+        `screen-intelligence-badge-${state}`;
+
+      document.getElementById(
+        "screenIntelligenceBadge"
+      ).textContent =
+        badge;
+
+      document.getElementById(
+        "screenIntelligenceIcon"
+      ).textContent =
+        icon;
+
+      document.getElementById(
+        "screenIntelligenceTitle"
+      ).textContent =
+        title;
+
+      document.getElementById(
+        "screenIntelligenceSummary"
+      ).textContent =
+        summary;
+
+      document.getElementById(
+        "screenExpectedTodayCount"
+      ).textContent =
+        String(
+          expectedToday.length
+        );
+
+      document.getElementById(
+        "screenExpectedTodayList"
+      ).textContent =
+        expectedTodayText;
+
+      document.getElementById(
+        "screenExpectedNowCount"
+      ).textContent =
+        String(
+          expectedNow.length
+        );
+
+      document.getElementById(
+        "screenExpectedNowList"
+      ).textContent =
+        expectedNowText;
+
+      document.getElementById(
+        "screenInactiveCount"
+      ).textContent =
+        String(
+          inactive.length
+        );
+
+      document.getElementById(
+        "screenInactiveList"
+      ).textContent =
+        inactiveText;
+
+      document.getElementById(
+        "screenIntelligenceNotice"
+      ).textContent =
+        notice;
+    }
+
+
     function renderOperationsIntelligence() {
       const panel = document.getElementById("operationsIntelligence");
       if (!panel) return;
@@ -17310,9 +19710,17 @@
       const players = Array.isArray(latestPlayerHeartbeats)
         ? latestPlayerHeartbeats
         : [];
-      const quietHours = isPlayerQuietHours();
-      const expectedToday = SCREEN_NAMES.filter(name => isScreenExpectedToday(name));
-      const expectedNow = quietHours ? [] : expectedToday;
+      const operationalState =
+        getBusinessOperationalState();
+
+      const quietHours =
+        !operationalState.openNow;
+
+      const expectedToday =
+        getExpectedScreensToday();
+
+      const expectedNow =
+        getExpectedScreensNow();
       const expectedPlayers = players.filter(player => expectedNow.includes(player.screen));
       const onlineExpected = expectedPlayers.filter(player => player.status === "online");
       const attentionPlayers = expectedPlayers.filter(player =>
@@ -17350,12 +19758,32 @@
       let title = greeting.title;
       let summary = "Everything is operating normally. All scheduled players are healthy.";
 
-      if (quietHours) {
+      if (!operationalState.operatingToday) {
         state = "sleeping";
-        badge = "Quiet hours";
+        badge = "Closed today";
+        icon = "🏢";
+        title = "Business closed";
+        summary = "No signage players are expected today. Offline players are intentional and do not require attention.";
+
+      } else if (!operationalState.openNow) {
+        state = "sleeping";
+        badge =
+          operationalState.state.id === "before-open"
+            ? "Before opening"
+            : "Closed";
+
         icon = "🌙";
-        title = "Quiet Hours";
-        summary = "Players are sleeping. Monitoring resumes automatically at 10:00, while last-known data remains available.";
+
+        title =
+          operationalState.state.id === "before-open"
+            ? "Players waiting for opening"
+            : "Business hours ended";
+
+        summary =
+          operationalState.state.id === "before-open"
+            ? `Players are intentionally inactive. ${operationalState.state.detail}`
+            : "Players are intentionally inactive after closing; last-known data remains available.";
+
       } else if (attentionPlayers.some(player => player.status === "offline")) {
         state = "critical";
         badge = "Attention";
@@ -17385,12 +19813,23 @@
       document.getElementById("operationsIntelligenceTitle").textContent = title;
       document.getElementById("operationsIntelligenceSummary").textContent = summary;
 
-      document.getElementById("operationsScheduledPlayers").textContent = quietHours
-        ? `${expectedToday.length} sleeping`
-        : `${onlineExpected.length} / ${expectedNow.length}`;
-      document.getElementById("operationsScheduledPlayersDetail").textContent = quietHours
-        ? `${expectedToday.length} expected today · polling paused`
-        : `${onlineExpected.length} online now · ${attentionPlayers.length} need attention`;
+      document.getElementById(
+        "operationsScheduledPlayers"
+      ).textContent =
+        !operationalState.operatingToday
+          ? "Closed"
+          : !operationalState.openNow
+            ? `${expectedToday.length} sleeping`
+            : `${onlineExpected.length} / ${expectedNow.length}`;
+
+      document.getElementById(
+        "operationsScheduledPlayersDetail"
+      ).textContent =
+        !operationalState.operatingToday
+          ? "0 players expected today"
+          : !operationalState.openNow
+            ? `${expectedToday.length} expected today · intentionally inactive now`
+            : `${onlineExpected.length} online now · ${attentionPlayers.length} need attention`;
 
       const versionComplianceElement = document.getElementById("operationsVersionCompliance");
       if (versionEligible.length) {
@@ -21114,6 +23553,952 @@
     }
 
 
+    /*
+     * =====================================================
+     * VERSION 1.3 — BUILD 107
+     * ANALYTICS FOUNDATION
+     * =====================================================
+     */
+
+    const OPERATIONS_ANALYTICS_STORAGE_KEY =
+      "miniGolfDashboardAnalyticsV13";
+
+    const OPERATIONS_ANALYTICS_MAX_AGE_MS =
+      8 * 24 * 60 * 60 * 1000;
+
+    const OPERATIONS_ANALYTICS_SAMPLE_INTERVAL_MS =
+      5 * 60 * 1000;
+
+    let operationsAnalyticsHistory = [];
+    let lastOperationsAnalyticsSampleAt = 0;
+
+    /*
+     * Build 112.2:
+     * Player uptime must not begin until a successful
+     * heartbeat refresh has completed in this page session.
+     */
+    let analyticsHeartbeatSnapshotReady =
+      false;
+
+    let analyticsHeartbeatSnapshotAt =
+      0;
+
+
+    function loadOperationsAnalyticsHistory() {
+      try {
+        const raw =
+          localStorage.getItem(
+            OPERATIONS_ANALYTICS_STORAGE_KEY
+          );
+
+        if (!raw) {
+          return;
+        }
+
+        const parsed =
+          JSON.parse(raw);
+
+        const cutoff =
+          Date.now() -
+          OPERATIONS_ANALYTICS_MAX_AGE_MS;
+
+        operationsAnalyticsHistory =
+          Array.isArray(parsed)
+            ? parsed.filter(
+                item =>
+                  item &&
+                  Number(item.timestamp) >= cutoff
+              )
+            : [];
+
+        if (operationsAnalyticsHistory.length) {
+          lastOperationsAnalyticsSampleAt =
+            Number(
+              operationsAnalyticsHistory[
+                operationsAnalyticsHistory.length - 1
+              ].timestamp
+            ) || 0;
+        }
+      } catch (error) {
+        console.warn(
+          "Operations analytics history could not be restored.",
+          error
+        );
+
+        operationsAnalyticsHistory = [];
+      }
+    }
+
+
+    function saveOperationsAnalyticsHistory() {
+      try {
+        localStorage.setItem(
+          OPERATIONS_ANALYTICS_STORAGE_KEY,
+          JSON.stringify(
+            operationsAnalyticsHistory
+          )
+        );
+      } catch (error) {
+        console.warn(
+          "Operations analytics history could not be saved.",
+          error
+        );
+      }
+    }
+
+
+    function markAnalyticsHeartbeatSnapshotReady() {
+      analyticsHeartbeatSnapshotReady =
+        true;
+
+      analyticsHeartbeatSnapshotAt =
+        Date.now();
+    }
+
+
+    function isAnalyticsHeartbeatSnapshotCurrent() {
+      if (!analyticsHeartbeatSnapshotReady) {
+        return false;
+      }
+
+      /*
+       * Auto-refresh is every 30 seconds. Five minutes gives
+       * ample tolerance while still preventing old session
+       * state from being treated as current indefinitely.
+       */
+      return (
+        Date.now() -
+        analyticsHeartbeatSnapshotAt <=
+        5 * 60 * 1000
+      );
+    }
+
+
+    function getAnalyticsExpectedPlayerSnapshot() {
+      const expectedNow =
+        getExpectedScreensNow();
+
+      if (!expectedNow.length) {
+        return {
+          expectedCount: 0,
+          onlineCount: 0,
+          uptime: null,
+          expectedScreens: [],
+          onlineExpectedScreens: []
+        };
+      }
+
+      /*
+       * Critical RC fix:
+       * Expected Now can become true before the first live
+       * heartbeat request has finished. Treat that short
+       * startup window as "not sampled", not "offline".
+       */
+      if (
+        !isAnalyticsHeartbeatSnapshotCurrent()
+      ) {
+        return {
+          expectedCount:
+            expectedNow.length,
+          onlineCount:
+            0,
+          uptime:
+            null,
+          expectedScreens:
+            expectedNow.slice(),
+          onlineExpectedScreens:
+            []
+        };
+      }
+
+      const expectedSet =
+        new Set(expectedNow);
+
+      const onlineCount =
+        latestPlayerHeartbeats.filter(
+          player =>
+            expectedSet.has(
+              player.screen
+            ) &&
+            player.status === "online"
+        ).length;
+
+      const onlineExpectedScreens =
+        latestPlayerHeartbeats
+          .filter(
+            player =>
+              expectedSet.has(
+                player.screen
+              ) &&
+              player.status === "online"
+          )
+          .map(
+            player =>
+              player.screen
+          );
+
+      return {
+        expectedCount:
+          expectedNow.length,
+        onlineCount:
+          onlineCount,
+        uptime:
+          onlineCount /
+          expectedNow.length,
+        expectedScreens:
+          expectedNow.slice(),
+        onlineExpectedScreens:
+          onlineExpectedScreens
+      };
+    }
+
+
+    function recordOperationsAnalyticsSample(
+      force = false
+    ) {
+      const now =
+        Date.now();
+
+      if (
+        !force &&
+        lastOperationsAnalyticsSampleAt &&
+        now -
+          lastOperationsAnalyticsSampleAt <
+          OPERATIONS_ANALYTICS_SAMPLE_INTERVAL_MS
+      ) {
+        return;
+      }
+
+      const healthScore =
+        latestHealthScoreResult &&
+        Number.isFinite(
+          Number(
+            latestHealthScoreResult.score
+          )
+        )
+          ? Number(
+              latestHealthScoreResult.score
+            )
+          : null;
+
+      const playerSnapshot =
+        getAnalyticsExpectedPlayerSnapshot();
+
+      if (
+        healthScore === null &&
+        playerSnapshot.uptime === null
+      ) {
+        return;
+      }
+
+      const operationalState =
+        getBusinessOperationalState();
+
+      const playerUptimeReady =
+        !operationalState.openNow ||
+        playerSnapshot.expectedCount === 0 ||
+        playerSnapshot.uptime !== null;
+
+      operationsAnalyticsHistory.push({
+        timestamp:
+          now,
+        healthScore:
+          healthScore,
+
+        expectedCount:
+          playerUptimeReady
+            ? playerSnapshot.expectedCount
+            : 0,
+
+        onlineCount:
+          playerUptimeReady
+            ? playerSnapshot.onlineCount
+            : 0,
+
+        expectedUptime:
+          playerUptimeReady
+            ? playerSnapshot.uptime
+            : null,
+
+        expectedScreens:
+          playerUptimeReady
+            ? (
+                playerSnapshot.expectedScreens ||
+                []
+              )
+            : [],
+
+        onlineExpectedScreens:
+          playerUptimeReady
+            ? (
+                playerSnapshot.onlineExpectedScreens ||
+                []
+              )
+            : [],
+        businessOpen:
+          operationalState.openNow,
+        businessOperatingToday:
+          operationalState.operatingToday,
+        profile:
+          operationalState.profile
+            ? operationalState.profile.label
+            : ""
+      });
+
+      const cutoff =
+        now -
+        OPERATIONS_ANALYTICS_MAX_AGE_MS;
+
+      operationsAnalyticsHistory =
+        operationsAnalyticsHistory.filter(
+          item =>
+            Number(
+              item.timestamp
+            ) >= cutoff
+        );
+
+      lastOperationsAnalyticsSampleAt =
+        now;
+
+      saveOperationsAnalyticsHistory();
+      renderOperationsAnalytics();
+    }
+
+
+    function getOperationsAnalyticsRangeMs(
+      range
+    ) {
+      if (range === "hour") {
+        return 60 * 60 * 1000;
+      }
+
+      if (range === "week") {
+        return 7 * 24 * 60 * 60 * 1000;
+      }
+
+      return 24 * 60 * 60 * 1000;
+    }
+
+
+    function getOperationsAnalyticsRangeLabel(
+      range
+    ) {
+      if (range === "hour") {
+        return "Last hour";
+      }
+
+      if (range === "week") {
+        return "Last 7 days";
+      }
+
+      return "Last 24 hours";
+    }
+
+
+    function getFilteredOperationsAnalytics() {
+      const rangeSelect =
+        document.getElementById(
+          "operationsAnalyticsRange"
+        );
+
+      const range =
+        rangeSelect
+          ? rangeSelect.value
+          : "day";
+
+      const cutoff =
+        Date.now() -
+        getOperationsAnalyticsRangeMs(
+          range
+        );
+
+      return {
+        range:
+          range,
+        samples:
+          operationsAnalyticsHistory.filter(
+            item =>
+              Number(
+                item.timestamp
+              ) >= cutoff
+          )
+      };
+    }
+
+
+    function averageNumbers(
+      values
+    ) {
+      const clean =
+        values.filter(
+          value =>
+            Number.isFinite(
+              Number(value)
+            )
+        );
+
+      if (!clean.length) {
+        return null;
+      }
+
+      return (
+        clean.reduce(
+          (sum, value) =>
+            sum +
+            Number(value),
+          0
+        ) /
+        clean.length
+      );
+    }
+
+
+    function buildPerScreenUptimeReport(
+      samples
+    ) {
+      return SCREEN_NAMES.map(
+        screenName => {
+          let expectedSamples = 0;
+          let onlineSamples = 0;
+
+          samples.forEach(
+            sample => {
+              const expectedScreens =
+                Array.isArray(
+                  sample.expectedScreens
+                )
+                  ? sample.expectedScreens
+                  : [];
+
+              if (
+                !expectedScreens.includes(
+                  screenName
+                )
+              ) {
+                return;
+              }
+
+              expectedSamples += 1;
+
+              const onlineScreens =
+                Array.isArray(
+                  sample.onlineExpectedScreens
+                )
+                  ? sample.onlineExpectedScreens
+                  : [];
+
+              if (
+                onlineScreens.includes(
+                  screenName
+                )
+              ) {
+                onlineSamples += 1;
+              }
+            }
+          );
+
+          return {
+            screenName:
+              screenName,
+            expectedSamples:
+              expectedSamples,
+            onlineSamples:
+              onlineSamples,
+            uptime:
+              expectedSamples > 0
+                ? onlineSamples /
+                  expectedSamples
+                : null
+          };
+        }
+      );
+    }
+
+
+    function escapeCsvValue(
+      value
+    ) {
+      const text =
+        String(
+          value ?? ""
+        );
+
+      if (
+        /[",\n]/.test(
+          text
+        )
+      ) {
+        return (
+          '"' +
+          text.replace(
+            /"/g,
+            '""'
+          ) +
+          '"'
+        );
+      }
+
+      return text;
+    }
+
+
+    function exportOperationsAnalyticsCsv() {
+      const result =
+        getFilteredOperationsAnalytics();
+
+      const samples =
+        result.samples;
+
+      if (!samples.length) {
+        window.alert(
+          "There are no analytics samples in the selected range to export."
+        );
+
+        return;
+      }
+
+      const rows = [
+        [
+          "Timestamp",
+          "Profile",
+          "Business Open",
+          "Health Score",
+          "Expected Count",
+          "Online Count",
+          "Expected Uptime %",
+          "Expected Screens",
+          "Online Expected Screens"
+        ]
+      ];
+
+      samples.forEach(
+        sample => {
+          rows.push([
+            new Date(
+              Number(
+                sample.timestamp
+              )
+            ).toISOString(),
+            sample.profile || "",
+            sample.businessOpen
+              ? "Yes"
+              : "No",
+            sample.healthScore ?? "",
+            sample.expectedCount ?? 0,
+            sample.onlineCount ?? 0,
+            sample.expectedUptime === null ||
+            sample.expectedUptime === undefined
+              ? ""
+              : Math.round(
+                  Number(
+                    sample.expectedUptime
+                  ) *
+                  100
+                ),
+            Array.isArray(
+              sample.expectedScreens
+            )
+              ? sample.expectedScreens.join(
+                  " | "
+                )
+              : "",
+            Array.isArray(
+              sample.onlineExpectedScreens
+            )
+              ? sample.onlineExpectedScreens.join(
+                  " | "
+                )
+              : ""
+          ]);
+        }
+      );
+
+      const csv =
+        rows
+          .map(
+            row =>
+              row
+                .map(
+                  escapeCsvValue
+                )
+                .join(",")
+          )
+          .join("\n");
+
+      const blob =
+        new Blob(
+          [csv],
+          {
+            type:
+              "text/csv;charset=utf-8"
+          }
+        );
+
+      const url =
+        URL.createObjectURL(
+          blob
+        );
+
+      const link =
+        document.createElement(
+          "a"
+        );
+
+      const rangeLabel =
+        getOperationsAnalyticsRangeLabel(
+          result.range
+        )
+          .toLowerCase()
+          .replace(
+            /\s+/g,
+            "-"
+          );
+
+      link.href =
+        url;
+
+      link.download =
+        `mini-golf-analytics-${rangeLabel}-${getBusinessDateKey()}.csv`;
+
+      document.body.appendChild(
+        link
+      );
+
+      link.click();
+      link.remove();
+
+      URL.revokeObjectURL(
+        url
+      );
+    }
+
+
+    function renderOperationsAnalytics() {
+      const panel =
+        document.getElementById(
+          "operationsAnalyticsPanel"
+        );
+
+      if (!panel) {
+        return;
+      }
+
+      const result =
+        getFilteredOperationsAnalytics();
+
+      const samples =
+        result.samples;
+
+      const healthSamples =
+        samples.filter(
+          item =>
+            Number.isFinite(
+              Number(
+                item.healthScore
+              )
+            )
+        );
+
+      const uptimeSamples =
+        samples.filter(
+          item =>
+            item.expectedUptime !== null &&
+            Number.isFinite(
+              Number(
+                item.expectedUptime
+              )
+            )
+        );
+
+      const averageHealth =
+        averageNumbers(
+          healthSamples.map(
+            item =>
+              Number(
+                item.healthScore
+              )
+          )
+        );
+
+      const averageUptime =
+        averageNumbers(
+          uptimeSamples.map(
+            item =>
+              Number(
+                item.expectedUptime
+              )
+          )
+        );
+
+      const lowestHealth =
+        healthSamples.length
+          ? Math.min(
+              ...healthSamples.map(
+                item =>
+                  Number(
+                    item.healthScore
+                  )
+              )
+            )
+          : null;
+
+      const byId =
+        id =>
+          document.getElementById(
+            id
+          );
+
+      if (byId("analyticsAverageHealth")) {
+        byId("analyticsAverageHealth").textContent =
+          averageHealth === null
+            ? "—"
+            : `${Math.round(averageHealth)}/100`;
+      }
+
+      if (byId("analyticsHealthDetail")) {
+        byId("analyticsHealthDetail").textContent =
+          healthSamples.length
+            ? `${healthSamples.length} health sample${healthSamples.length === 1 ? "" : "s"}`
+            : "Waiting for samples";
+      }
+
+      if (byId("analyticsExpectedUptime")) {
+        byId("analyticsExpectedUptime").textContent =
+          averageUptime === null
+            ? "—"
+            : `${Math.round(averageUptime * 100)}%`;
+      }
+
+      if (byId("analyticsUptimeDetail")) {
+        byId("analyticsUptimeDetail").textContent =
+          uptimeSamples.length
+            ? `${uptimeSamples.length} business-window sample${uptimeSamples.length === 1 ? "" : "s"}`
+            : "No expected-player window sampled yet";
+      }
+
+      if (byId("analyticsSampleCount")) {
+        byId("analyticsSampleCount").textContent =
+          String(
+            samples.length
+          );
+      }
+
+      if (byId("analyticsSampleDetail")) {
+        byId("analyticsSampleDetail").textContent =
+          samples.length
+            ? getOperationsAnalyticsRangeLabel(
+                result.range
+              )
+            : "No history yet";
+      }
+
+      if (byId("analyticsLowestHealth")) {
+        byId("analyticsLowestHealth").textContent =
+          lowestHealth === null
+            ? "—"
+            : `${Math.round(lowestHealth)}/100`;
+      }
+
+      if (byId("analyticsLowestHealthDetail")) {
+        if (lowestHealth === null) {
+          byId("analyticsLowestHealthDetail").textContent =
+            "No samples yet";
+        } else {
+          const lowestSample =
+            healthSamples.find(
+              item =>
+                Number(
+                  item.healthScore
+                ) === lowestHealth
+            );
+
+          byId("analyticsLowestHealthDetail").textContent =
+            lowestSample
+              ? new Date(
+                  Number(
+                    lowestSample.timestamp
+                  )
+                ).toLocaleString()
+              : "Recorded in selected range";
+        }
+      }
+
+      if (byId("analyticsChartRangeLabel")) {
+        byId("analyticsChartRangeLabel").textContent =
+          getOperationsAnalyticsRangeLabel(
+            result.range
+          );
+      }
+
+      const bars =
+        byId(
+          "analyticsHealthBars"
+        );
+
+      if (bars) {
+        const chartSamples =
+          healthSamples.slice(
+            -48
+          );
+
+        if (!chartSamples.length) {
+          bars.innerHTML = `
+            <div class="operations-analytics-empty">
+              History will appear as samples are collected.
+            </div>
+          `;
+        } else {
+          bars.innerHTML =
+            chartSamples
+              .map(item => {
+                const score =
+                  Math.max(
+                    0,
+                    Math.min(
+                      100,
+                      Number(
+                        item.healthScore
+                      )
+                    )
+                  );
+
+                const timestamp =
+                  new Date(
+                    Number(
+                      item.timestamp
+                    )
+                  );
+
+                return `
+                  <div
+                    class="operations-analytics-bar"
+                    title="${escapeHtml(
+                      `${timestamp.toLocaleString()} · Health ${Math.round(score)}/100`
+                    )}"
+                  >
+                    <span style="height:${score}%"></span>
+                  </div>
+                `;
+              })
+              .join("");
+        }
+      }
+
+      const reportLabel =
+        byId(
+          "analyticsScreenReportRangeLabel"
+        );
+
+      if (reportLabel) {
+        reportLabel.textContent =
+          getOperationsAnalyticsRangeLabel(
+            result.range
+          );
+      }
+
+      const screenBody =
+        byId(
+          "analyticsScreenUptimeBody"
+        );
+
+      if (screenBody) {
+        const report =
+          buildPerScreenUptimeReport(
+            samples
+          );
+
+        const visibleRows =
+          report.filter(
+            item =>
+              item.expectedSamples > 0
+          );
+
+        if (!visibleRows.length) {
+          screenBody.innerHTML = `
+            <tr>
+              <td colspan="4">
+                No business-window samples yet.
+              </td>
+            </tr>
+          `;
+        } else {
+          screenBody.innerHTML =
+            visibleRows
+              .map(item => `
+                <tr>
+                  <td>${escapeHtml(item.screenName)}</td>
+                  <td>${item.expectedSamples}</td>
+                  <td>${item.onlineSamples}</td>
+                  <td>${Math.round(item.uptime * 100)}%</td>
+                </tr>
+              `)
+              .join("");
+        }
+      }
+    }
+
+
+    function setupOperationsAnalytics() {
+      loadOperationsAnalyticsHistory();
+
+      const range =
+        document.getElementById(
+          "operationsAnalyticsRange"
+        );
+
+      const clearButton =
+        document.getElementById(
+          "clearOperationsAnalyticsButton"
+        );
+
+      const exportButton =
+        document.getElementById(
+          "exportOperationsAnalyticsButton"
+        );
+
+      if (range) {
+        range.addEventListener(
+          "change",
+          renderOperationsAnalytics
+        );
+      }
+
+      if (exportButton) {
+        exportButton.addEventListener(
+          "click",
+          exportOperationsAnalyticsCsv
+        );
+      }
+
+      if (clearButton) {
+        clearButton.addEventListener(
+          "click",
+          function() {
+            const confirmed =
+              window.confirm(
+                "Clear the analytics history stored in this browser?"
+              );
+
+            if (!confirmed) {
+              return;
+            }
+
+            operationsAnalyticsHistory =
+              [];
+
+            lastOperationsAnalyticsSampleAt =
+              0;
+
+            saveOperationsAnalyticsHistory();
+            renderOperationsAnalytics();
+          }
+        );
+      }
+
+      renderOperationsAnalytics();
+    }
+
+
     function renderMissionControlStatuses() {
       if (!missionStatusUpdated) {
         return;
@@ -21160,14 +24545,23 @@
           : "Some configured screen schedules are still unavailable."
       );
 
-      const quietHours =
-        typeof isPlayerQuietHours === "function"
-          ? isPlayerQuietHours()
-          : false;
+      const operationalState =
+        getBusinessOperationalState();
 
-      const onlinePlayers =
+      const expectedNowScreens =
+        getExpectedScreensNow();
+
+      const expectedNowSet =
+        new Set(
+          expectedNowScreens
+        );
+
+      const onlineExpectedPlayers =
         latestPlayerHeartbeats.filter(
           player =>
+            expectedNowSet.has(
+              player.screen
+            ) &&
             player.status === "online"
         ).length;
 
@@ -21175,20 +24569,25 @@
         missionPlayersCard,
         missionPlayersValue,
         missionPlayersDetail,
-        quietHours ||
-        onlinePlayers === SCREEN_NAMES.length
+        !operationalState.openNow ||
+        onlineExpectedPlayers ===
+          expectedNowScreens.length
           ? "ok"
-          : onlinePlayers > 0
+          : onlineExpectedPlayers > 0
             ? "warning"
             : "error",
-        quietHours
-          ? "Sleeping"
-          : `${onlinePlayers}/${SCREEN_NAMES.length}`,
-        quietHours
-          ? "Quiet hours are active; inactive players are expected."
-          : onlinePlayers === SCREEN_NAMES.length
-            ? "All players are checking in normally."
-            : `${SCREEN_NAMES.length - onlinePlayers} player(s) are not currently online.`
+        !operationalState.operatingToday
+          ? "Closed"
+          : !operationalState.openNow
+            ? "Sleeping"
+            : `${onlineExpectedPlayers}/${expectedNowScreens.length}`,
+        !operationalState.operatingToday
+          ? "The business is closed today; no players are expected."
+          : !operationalState.openNow
+            ? "Players are intentionally inactive outside today’s business hours."
+            : onlineExpectedPlayers === expectedNowScreens.length
+              ? "All expected players are checking in normally."
+              : `${expectedNowScreens.length - onlineExpectedPlayers} expected player(s) are not currently online.`
       );
 
       const snapshotSavedAt =
@@ -22055,6 +25454,202 @@
     }
 
 
+    /*
+     * =====================================================
+     * VERSION 1.3 — BUILD 106
+     * SMARTER ROLLOUT ASSISTANT
+     * =====================================================
+     */
+
+    function getRolloutRecommendation(
+      screenName
+    ) {
+      const state =
+        getRolloutStateForScreen(
+          screenName
+        );
+
+      if (
+        isScreenInMaintenance(
+          screenName
+        )
+      ) {
+        return {
+          id: "maintenance",
+          label: "Maintenance",
+          icon: "🛠️",
+          tone: "muted",
+          detail:
+            "This screen is intentionally excluded by Maintenance Mode."
+        };
+      }
+
+      if (!state.expectedToday) {
+        return {
+          id: "not-scheduled",
+          label: "No action needed",
+          icon: "🌙",
+          tone: "muted",
+          detail:
+            "This screen is not expected to operate today."
+        };
+      }
+
+      if (!state.expectedNow) {
+        return {
+          id: "sleeping",
+          label: "Wait for business hours",
+          icon: "🌙",
+          tone: "muted",
+          detail:
+            "This screen is scheduled today but is intentionally inactive right now."
+        };
+      }
+
+      if (
+        state.readinessState === "blocked"
+      ) {
+        return {
+          id: "blocked",
+          label: "Resolve blockers",
+          icon: "⛔",
+          tone: "danger",
+          detail:
+            state.notes.join(" ")
+        };
+      }
+
+      if (
+        state.readinessState === "review"
+      ) {
+        return {
+          id: "review",
+          label: "Review before deploy",
+          icon: "🟠",
+          tone: "warning",
+          detail:
+            state.notes.join(" ")
+        };
+      }
+
+      if (
+        state.deploymentStage ===
+        "deployed"
+      ) {
+        return {
+          id: "deployed",
+          label: "Deployed",
+          icon: "✅",
+          tone: "success",
+          detail:
+            "This screen is healthy and already marked Deployed."
+        };
+      }
+
+      if (
+        state.deploymentStage ===
+        "testing"
+      ) {
+        return {
+          id: "ready-to-deploy",
+          label: "Ready to deploy",
+          icon: "🚀",
+          tone: "success",
+          detail:
+            "Schedule, image, fallback, heartbeat, and player-version checks passed."
+        };
+      }
+
+      return {
+        id: "ready-for-testing",
+        label: "Ready for testing",
+        icon: "🧪",
+        tone: "success",
+        detail:
+          "Operational checks passed. Start Testing when you are ready."
+      };
+    }
+
+
+    function updateRolloutRecommendationSummary() {
+      if (!rolloutRecommendationSummary) {
+        return;
+      }
+
+      const recommendations =
+        SCREEN_NAMES.map(
+          screenName =>
+            getRolloutRecommendation(
+              screenName
+            )
+        );
+
+      const readyToDeploy =
+        recommendations.filter(
+          item =>
+            item.id ===
+            "ready-to-deploy"
+        ).length;
+
+      const readyForTesting =
+        recommendations.filter(
+          item =>
+            item.id ===
+            "ready-for-testing"
+        ).length;
+
+      const needReview =
+        recommendations.filter(
+          item =>
+            item.id === "review" ||
+            item.id === "blocked"
+        ).length;
+
+      const inactive =
+        recommendations.filter(
+          item =>
+            [
+              "maintenance",
+              "not-scheduled",
+              "sleeping"
+            ].includes(
+              item.id
+            )
+        ).length;
+
+      const parts = [];
+
+      if (readyToDeploy > 0) {
+        parts.push(
+          `${readyToDeploy} ready to deploy`
+        );
+      }
+
+      if (readyForTesting > 0) {
+        parts.push(
+          `${readyForTesting} ready for testing`
+        );
+      }
+
+      if (needReview > 0) {
+        parts.push(
+          `${needReview} need review`
+        );
+      }
+
+      if (inactive > 0) {
+        parts.push(
+          `${inactive} intentionally inactive`
+        );
+      }
+
+      rolloutRecommendationSummary.textContent =
+        parts.length > 0
+          ? parts.join(" · ")
+          : "All rollout states are stable.";
+    }
+
+
     function getRolloutStateForScreen(
       screenName
     ) {
@@ -22063,14 +25658,16 @@
           screenName
         );
 
+      const businessOperationalState =
+        getBusinessOperationalState();
+
       const quietHours =
-        typeof isPlayerQuietHours === "function"
-          ? isPlayerQuietHours()
-          : false;
+        !businessOperationalState.openNow;
 
       const expectedNow =
-        expectedToday &&
-        !quietHours;
+        isScreenExpectedNow(
+          screenName
+        );
 
       const scheduleState =
         screenStates.get(
@@ -22141,13 +25738,23 @@
           "not-scheduled";
 
         label =
-          "Not scheduled";
+          isScreenInMaintenance(
+            screenName
+          )
+            ? "Maintenance"
+            : "Not scheduled";
 
         notes.push(
-          "This screen is not expected to operate today."
+          isScreenInMaintenance(
+            screenName
+          )
+            ? "Maintenance Mode is active for this screen, so it is intentionally excluded from readiness checks."
+            : isBusinessOperatingToday()
+              ? "This screen is not part of today’s active screen group."
+              : "The business is closed today, so this screen is intentionally inactive."
         );
 
-      } else if (quietHours) {
+      } else if (!expectedNow) {
         state =
           "sleeping";
 
@@ -22155,7 +25762,9 @@
           "Sleeping";
 
         notes.push(
-          "Quiet Hours are active. The player is not expected to check in between 22:00 and 10:00."
+          businessOperationalState.state.id === "before-open"
+            ? `The business has not opened yet. ${businessOperationalState.state.detail}`
+            : "Today’s business hours have ended. The player is not expected to check in."
         );
 
       } else {
@@ -22601,6 +26210,8 @@
 
 
     function renderRolloutAssistant() {
+      updateRolloutRecommendationSummary();
+
       if (
         !rolloutAssistantList ||
         !rolloutAssistantSummary
@@ -22780,6 +26391,68 @@
                       ${escapeHtml(item.notes.join(" · "))}
                     </div>
                   </div>
+
+                  <div
+                    class="rollout-recommendation rollout-recommendation-${getRolloutRecommendation(item.screenName).tone}"
+                    data-rollout-field="recommendation"
+                  >
+                    <div class="rollout-recommendation-header">
+                      <span class="rollout-recommendation-icon" aria-hidden="true">
+                        ${getRolloutRecommendation(item.screenName).icon}
+                      </span>
+
+                      <span class="rollout-recommendation-label">
+                        ${escapeHtml(getRolloutRecommendation(item.screenName).label)}
+                      </span>
+                    </div>
+
+                    <div class="rollout-recommendation-detail">
+                      ${escapeHtml(getRolloutRecommendation(item.screenName).detail)}
+                    </div>
+                  </div>
+
+                  ${
+                    (() => {
+                      const recommendation =
+                        getRolloutRecommendation(
+                          item.screenName
+                        );
+
+                      if (
+                        recommendation.id ===
+                        "ready-to-deploy"
+                      ) {
+                        return `
+                          <button
+                            class="button button-primary rollout-suggested-action"
+                            type="button"
+                            data-rollout-stage="deployed"
+                            data-rollout-screen="${escapeHtml(item.screenName)}"
+                          >
+                            ✓ Mark Deployed
+                          </button>
+                        `;
+                      }
+
+                      if (
+                        recommendation.id ===
+                        "ready-for-testing"
+                      ) {
+                        return `
+                          <button
+                            class="button button-primary rollout-suggested-action"
+                            type="button"
+                            data-rollout-stage="testing"
+                            data-rollout-screen="${escapeHtml(item.screenName)}"
+                          >
+                            🧪 Start Testing
+                          </button>
+                        `;
+                      }
+
+                      return "";
+                    })()
+                  }
 
                   ${
                     (() => {
@@ -23603,6 +27276,258 @@
 
 
     /*
+     * =====================================================
+     * VERSION 1.3 — BUILD 105
+     * FUNCTIONAL GO-LIVE PREFLIGHT
+     * =====================================================
+     */
+
+    let goLivePreflightRunning =
+      false;
+
+    let goLivePreflightLastRunAt =
+      null;
+
+
+    function setGoLivePreflightProgress(
+      percent,
+      text
+    ) {
+      const safePercent =
+        Math.max(
+          0,
+          Math.min(
+            100,
+            Number(percent) || 0
+          )
+        );
+
+      if (goLivePreflightProgressBar) {
+        goLivePreflightProgressBar.style.width =
+          `${safePercent}%`;
+      }
+
+      if (goLivePreflightProgressText) {
+        goLivePreflightProgressText.textContent =
+          text || "";
+      }
+
+      if (goLivePreflightProgress) {
+        goLivePreflightProgress.classList.toggle(
+          "running",
+          safePercent > 0 &&
+          safePercent < 100
+        );
+      }
+    }
+
+
+    function setGoLivePreflightLastRun(
+      date
+    ) {
+      goLivePreflightLastRunAt =
+        date || null;
+
+      if (!goLivePreflightLastRun) {
+        return;
+      }
+
+      goLivePreflightLastRun.textContent =
+        goLivePreflightLastRunAt
+          ? `Last run ${goLivePreflightLastRunAt.toLocaleTimeString()}`
+          : "Not run yet";
+    }
+
+
+    async function runFunctionalGoLivePreflight() {
+      if (goLivePreflightRunning) {
+        return;
+      }
+
+      goLivePreflightRunning =
+        true;
+
+      refreshGoLiveReadinessButton.disabled =
+        true;
+
+      refreshGoLiveReadinessButton.textContent =
+        "Running…";
+
+      goLiveReadinessState.className =
+        "go-live-readiness-state go-live-warning";
+
+      goLiveReadinessState.textContent =
+        "Checking";
+
+      goLiveReadinessHeadline.textContent =
+        "Running live preflight";
+
+      goLiveReadinessDescription.textContent =
+        "Refreshing health, heartbeat, and repository state before evaluating readiness.";
+
+      if (goLiveReadinessList) {
+        goLiveReadinessList.innerHTML = `
+          <div class="go-live-readiness-item go-live-readiness-item-running">
+            <div class="go-live-readiness-icon">⏳</div>
+            <div>
+              <div class="go-live-readiness-title">
+                Live refresh in progress
+              </div>
+              <div class="go-live-readiness-detail">
+                Existing data remains available while the preflight refreshes its inputs.
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
+      const refreshIssues =
+        [];
+
+      try {
+        setGoLivePreflightProgress(
+          12,
+          "Checking Apps Script and System Health…"
+        );
+
+        try {
+          await loadSystemHealth({
+            background:
+              true
+          });
+
+        } catch (error) {
+          refreshIssues.push(
+            `System Health refresh: ${error.message || error}`
+          );
+        }
+
+        setGoLivePreflightProgress(
+          42,
+          "Refreshing player heartbeats…"
+        );
+
+        try {
+          await loadPlayerHeartbeats({
+            background:
+              true
+          });
+
+        } catch (error) {
+          refreshIssues.push(
+            `Heartbeat refresh: ${error.message || error}`
+          );
+        }
+
+        setGoLivePreflightProgress(
+          68,
+          "Checking repository image index…"
+        );
+
+        try {
+          await scanImageHealth();
+
+        } catch (error) {
+          refreshIssues.push(
+            `Image repository refresh: ${error.message || error}`
+          );
+        }
+
+        setGoLivePreflightProgress(
+          88,
+          "Evaluating business-aware deployment readiness…"
+        );
+
+        const checks =
+          buildGoLiveReadinessChecks();
+
+        if (
+          refreshIssues.length > 0
+        ) {
+          checks.push({
+            level:
+              "warning",
+
+            icon:
+              "🟠",
+
+            title:
+              "Preflight refresh observations",
+
+            detail:
+              refreshIssues.join(
+                " · "
+              )
+          });
+        }
+
+        renderGoLiveReadiness(
+          checks
+        );
+
+        setGoLivePreflightLastRun(
+          new Date()
+        );
+
+        setGoLivePreflightProgress(
+          100,
+          "Preflight complete."
+        );
+
+        if (goLivePreflightFooter) {
+          const operationalState =
+            getBusinessOperationalState();
+
+          goLivePreflightFooter.textContent =
+            operationalState.operatingToday
+              ? operationalState.openNow
+                ? "Live business window active. Readiness reflects players expected right now."
+                : "Business is not currently open. Player inactivity is treated as intentional."
+              : "Business is closed today. No players are required for operational readiness.";
+        }
+
+      } catch (error) {
+        console.error(
+          "Functional Go-Live Preflight failed.",
+          error
+        );
+
+        goLiveReadinessState.className =
+          "go-live-readiness-state go-live-warning";
+
+        goLiveReadinessState.textContent =
+          "Review";
+
+        goLiveReadinessHeadline.textContent =
+          "Preflight could not complete";
+
+        goLiveReadinessDescription.textContent =
+          error.message ||
+          "One readiness step could not be evaluated.";
+
+        setGoLivePreflightProgress(
+          100,
+          "Preflight ended with an error."
+        );
+
+        setGoLivePreflightLastRun(
+          new Date()
+        );
+
+      } finally {
+        goLivePreflightRunning =
+          false;
+
+        refreshGoLiveReadinessButton.disabled =
+          false;
+
+        refreshGoLiveReadinessButton.textContent =
+          "Run preflight";
+      }
+    }
+
+
+    /*
      * GO-LIVE READINESS
      */
 
@@ -23641,8 +27566,22 @@
       const checks =
         [];
 
+      const operationalState =
+        getBusinessOperationalState();
+
+      const expectedToday =
+        getExpectedScreensToday();
+
+      const expectedNow =
+        getExpectedScreensNow();
+
+      const expectedTodaySet =
+        new Set(
+          expectedToday
+        );
+
       const loadedStates =
-        SCREEN_NAMES
+        expectedToday
           .map(
             screenName =>
               screenStates.get(
@@ -23652,7 +27591,7 @@
           .filter(Boolean);
 
       const missingScreens =
-        SCREEN_NAMES.filter(
+        expectedToday.filter(
           screenName =>
             !screenStates.has(
               screenName
@@ -23674,9 +27613,11 @@
           "All schedules loaded",
 
         detail:
-          missingScreens.length === 0
-            ? `All ${SCREEN_NAMES.length} configured screens have schedule data.`
-            : `Missing schedule data for: ${missingScreens.join(", ")}.`
+          !operationalState.operatingToday
+            ? "The business is closed today; no player schedules are required for go-live readiness."
+            : missingScreens.length === 0
+              ? `All ${expectedToday.length} screen(s) expected today have schedule data.`
+              : `Missing schedule data for: ${missingScreens.join(", ")}.`
       });
 
       const screensWithoutFallback =
@@ -23738,6 +27679,29 @@
             ? "All loaded schedules are live."
             : `${offlineDataCount} screen(s) are using cached dashboard data.`
       });
+
+      checks.push({
+        level:
+          "ok",
+
+        icon:
+          operationalState.openNow
+            ? "✅"
+            : operationalState.operatingToday
+              ? "🌙"
+              : "🏢",
+
+        title:
+          "Business operating profile",
+
+        detail:
+          !operationalState.operatingToday
+            ? `${operationalState.profile.label} profile: business closed today. No players are expected.`
+            : operationalState.openNow
+              ? `${operationalState.profile.label} profile is active and the business is currently open. ${expectedNow.length} player(s) are expected now.`
+              : `${operationalState.profile.label} profile is active, but the business is outside today's opening window.`
+      });
+
 
       const score =
         latestHealthScoreResult &&
@@ -23817,12 +27781,7 @@
         );
 
       const expectedScreenNames =
-        SCREEN_NAMES.filter(
-          screenName =>
-            isScreenExpectedToday(
-              screenName
-            )
-        );
+        expectedToday;
 
       const playersWithWrongVersion =
         expectedScreenNames.filter(
@@ -23882,18 +27841,9 @@
               : `Every player expected today reports ${EXPECTED_PLAYER_VERSION}.`
       });
 
-      const quietHours =
-        typeof isPlayerQuietHours === "function"
-          ? isPlayerQuietHours()
-          : false;
-
       const unavailablePlayers =
-        expectedScreenNames.filter(
+        expectedNow.filter(
           screenName => {
-            if (quietHours) {
-              return false;
-            }
-
             const player =
               heartbeatMap.get(
                 screenName
@@ -23908,13 +27858,12 @@
 
       checks.push({
         level:
-          quietHours ||
           unavailablePlayers.length === 0
             ? "ok"
             : "warning",
 
         icon:
-          quietHours
+          expectedNow.length === 0
             ? "🌙"
             : unavailablePlayers.length === 0
               ? "✅"
@@ -23924,11 +27873,70 @@
           "Player heartbeat",
 
         detail:
-          quietHours
-            ? "Quiet hours are active; sleeping players are expected."
+          expectedNow.length === 0
+            ? operationalState.operatingToday
+              ? "The business is outside its opening window; sleeping players are expected."
+              : "The business is closed today; no heartbeat is required."
             : unavailablePlayers.length === 0
-              ? "All configured players have checked in."
+              ? `All ${expectedNow.length} player(s) expected right now have checked in.`
               : `No recent heartbeat from: ${unavailablePlayers.join(", ")}.`
+      });
+
+      const maintenance =
+        getMaintenanceScreens();
+
+      checks.push({
+        level:
+          "ok",
+
+        icon:
+          maintenance.length > 0
+            ? "🛠️"
+            : "✅",
+
+        title:
+          "Maintenance exclusions",
+
+        detail:
+          maintenance.length > 0
+            ? `${maintenance.join(", ")} excluded intentionally by Maintenance Mode.`
+            : "No players are currently excluded by Maintenance Mode."
+      });
+
+      const expectedDeploymentScreens =
+        expectedToday.filter(
+          screenName =>
+            !isScreenInMaintenance(
+              screenName
+            )
+        );
+
+      const untrackedDeploymentScreens =
+        expectedDeploymentScreens.filter(
+          screenName =>
+            getRolloutStage(
+              screenName
+            ) === "not-started"
+        );
+
+      checks.push({
+        level:
+          "ok",
+
+        icon:
+          untrackedDeploymentScreens.length > 0
+            ? "ℹ️"
+            : "✅",
+
+        title:
+          "Rollout tracking",
+
+        detail:
+          untrackedDeploymentScreens.length > 0
+            ? `Tracking only: ${untrackedDeploymentScreens.join(", ")} are not marked Testing/Deployed. This does not block signage operation.`
+            : expectedDeploymentScreens.length > 0
+              ? "All expected screens have a rollout tracking stage."
+              : "No rollout stage is required while no screens are expected."
       });
 
       const savedAt =
@@ -24352,6 +28360,11 @@
     setupNotificationCenter();
     setupDashboardScrollNavigation();
     renderApplicationEnvironment();
+    setupMaintenanceMode();
+    setupOperationsAnalytics();
+    scheduleOperationsCenterRender({
+      immediate: true
+    });
     setupDiagnosticsExport();
     setupApplicationInformationDialogs();
     setupCommandPalette();
@@ -24388,10 +28401,10 @@
       ]).then(function() {
         runGoLiveReadinessCheck();
         renderRolloutAssistant();
-        renderOperationsIntelligence();
-        renderMissionControlStatuses();
         updateOperationsPanel();
-        scheduleBuild89Phase3ReactiveRender({ immediate: true });
+        scheduleBuild89Phase3ReactiveRender({
+          immediate: true
+        });
       });
     }
 
@@ -24409,9 +28422,21 @@
 
     setInterval(
       function() {
+        /*
+         * Data polling continues through its existing timers.
+         * Only cosmetic live rendering is skipped while this tab
+         * is hidden, then refreshed immediately on return.
+         */
+        if (document.hidden) {
+          return;
+        }
+
         updateLiveInformation();
         updateOperationsPanel();
-        renderOperationsIntelligence();
+
+        scheduleOperationsCenterRender({
+          sampleAnalytics: true
+        });
 
         if (
           getSavedThemePreference() ===
@@ -24421,4 +28446,25 @@
         }
       },
       LIVE_UPDATE_MS
+    );
+
+
+    document.addEventListener(
+      "visibilitychange",
+      function() {
+        if (document.hidden) {
+          return;
+        }
+
+        updateLiveInformation();
+        updateOperationsPanel();
+
+        scheduleOperationsCenterRender({
+          immediate: true,
+          sampleAnalytics: true
+        });
+
+        renderRolloutAssistant();
+        runGoLiveReadinessCheck();
+      }
     );
