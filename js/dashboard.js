@@ -22,12 +22,12 @@
       "version.json";
 
     const APPLICATION_RELEASE_FALLBACK = {
-      version: "1.3.0",
-      displayVersion: "1.3",
-      channel: "Stable",
-      build: "113",
-      status: "Stable Release",
-      tag: "v1.3.0"
+      version: "1.4.0",
+      displayVersion: "1.4",
+      channel: "Development",
+      build: "117.3",
+      status: "Development",
+      tag: ""
     };
 
     let applicationRelease = {
@@ -129,7 +129,15 @@
      *   close: "20:00"
      * }
      */
-    const BUSINESS_SPECIAL_DATES = [];
+    let BUSINESS_SPECIAL_DATES = [];
+
+    /*
+     * Build 115.2 keeps the complete Holiday Schedule Days feed separate
+     * from the routing-only list above. The manager must be able to recall
+     * disabled (and even currently invalid) rows so that saving a new row
+     * can never silently replace rows that were already in Google Sheets.
+     */
+    let HOLIDAY_SCHEDULE_DAYS_ALL = [];
 
 
     function getBusinessDateKey(
@@ -1329,6 +1337,179 @@
         specialNotice.textContent =
           "Special / Holiday business-hours override: none configured.";
       }
+    }
+
+
+    let holidayScheduleDaysRequestGeneration = 0;
+    let holidayScheduleManagerFeedLoaded = false;
+
+    function setHolidayScheduleManagerLoadState(state, message) {
+      const addButton = document.getElementById("holidayScheduleAddButton");
+      const saveButton = document.getElementById("holidayScheduleSaveButton");
+      const status = document.getElementById("holidayScheduleManagerStatus");
+      const body = document.getElementById("holidayScheduleManagerBody");
+
+      if (addButton) addButton.disabled = state !== "ready";
+      if (saveButton) saveButton.disabled = state !== "ready";
+
+      if (state === "loading") {
+        holidayScheduleManagerFeedLoaded = false;
+        if (status) status.textContent = "Loading…";
+        if (body) {
+          body.innerHTML = '<tr><td colspan="11" class="manager-empty">Loading Holiday Schedule Days…</td></tr>';
+        }
+        return;
+      }
+
+      if (state === "error") {
+        holidayScheduleManagerFeedLoaded = false;
+        if (status) status.textContent = "LOAD FAILED";
+        if (body && !holidayScheduleManagerRows.length) {
+          body.innerHTML = `<tr><td colspan="11" class="manager-empty">${escapeHtml(message || "Holiday Schedule Days could not be loaded. Use Reload to try again.")}</td></tr>`;
+        }
+        return;
+      }
+
+      holidayScheduleManagerFeedLoaded = true;
+    }
+
+    function loadHolidayScheduleDays() {
+      holidayScheduleDaysRequestGeneration += 1;
+      setHolidayScheduleManagerLoadState("loading");
+
+      const generation =
+        holidayScheduleDaysRequestGeneration;
+
+      const callbackName =
+        `holidayScheduleDaysCallback_${generation}`;
+
+      const scriptId =
+        "holiday-schedule-days-feed";
+
+      const previousScript =
+        document.getElementById(scriptId);
+
+      if (previousScript) {
+        previousScript.remove();
+      }
+
+      window[callbackName] =
+        function(payload) {
+          try {
+            if (
+              !payload ||
+              payload.success !== true ||
+              !Array.isArray(payload.days)
+            ) {
+              throw new Error(
+                payload && payload.error
+                  ? payload.error
+                  : "Holiday Schedule Days feed is invalid."
+              );
+            }
+
+            HOLIDAY_SCHEDULE_DAYS_ALL =
+              payload.days
+                .filter(day => day)
+                .map(day => ({
+                  rowNumber: day.rowNumber,
+                  date: day.date || "",
+                  label: day.label || "Special / Holiday",
+                  open: day.open || "",
+                  close: day.close || "",
+                  closed: day.closed === true,
+                  enabled: day.enabled === true,
+                  sourceTabs: day.sourceTabs || {},
+                  valid: day.valid === true,
+                  problems: Array.isArray(day.problems) ? day.problems : []
+                }));
+
+            BUSINESS_SPECIAL_DATES =
+              HOLIDAY_SCHEDULE_DAYS_ALL
+                .filter(day =>
+                  day &&
+                  day.enabled === true &&
+                  day.valid === true &&
+                  day.date
+                )
+                .map(day => ({
+                  date: day.date,
+                  label: day.label || "Special / Holiday",
+                  open: day.open || "",
+                  close: day.close || "",
+                  closed: day.closed === true,
+                  sourceTabs: day.sourceTabs || {}
+                }));
+
+            saveOfflineSnapshotSection(
+              "holidayScheduleDays",
+              BUSINESS_SPECIAL_DATES
+            );
+
+            syncHolidayScheduleManagerFromFeed();
+            setHolidayScheduleManagerLoadState("ready");
+
+            if (holidayCalendarWorkspace.classList.contains("active")) {
+              renderHolidayCalendar();
+              if (selectedCalendarDate) {
+                openCalendarDetails(selectedCalendarDate);
+              }
+            }
+
+            renderBusinessProfile();
+            updateOperationsPanel();
+            renderScheduleRouting();
+
+            scheduleOperationsCenterRender({
+              immediate: true
+            });
+          } catch (error) {
+            console.warn(
+              "Holiday Schedule Days could not be loaded.",
+              error
+            );
+            setHolidayScheduleManagerLoadState(
+              "error",
+              error && error.message
+                ? error.message
+                : "Holiday Schedule Days could not be loaded. Use Reload to try again."
+            );
+          } finally {
+            delete window[callbackName];
+            const script = document.getElementById(scriptId);
+            if (script) script.remove();
+          }
+        };
+
+      const script =
+        document.createElement("script");
+
+      script.id = scriptId;
+
+      const separator =
+        SCHEDULE_FEED_URL.includes("?")
+          ? "&"
+          : "?";
+
+      script.src =
+        `${SCHEDULE_FEED_URL}` +
+        `${separator}action=holidayScheduleDays` +
+        `&callback=${callbackName}` +
+        `&_=${Date.now()}`;
+
+      script.onerror =
+        function() {
+          delete window[callbackName];
+          console.warn(
+            "Could not load Holiday Schedule Days from Apps Script."
+          );
+          setHolidayScheduleManagerLoadState(
+            "error",
+            "Could not load Holiday Schedule Days from Apps Script. Use Reload to try again."
+          );
+        };
+
+      document.head.appendChild(script);
     }
 
 
@@ -3466,6 +3647,26 @@
         "reloadAuditButton"
       );
 
+    const auditRetentionSelect =
+      document.getElementById(
+        "auditRetentionSelect"
+      );
+
+    const saveAuditRetentionButton =
+      document.getElementById(
+        "saveAuditRetentionButton"
+      );
+
+    const clearOldAuditLogsButton =
+      document.getElementById(
+        "clearOldAuditLogsButton"
+      );
+
+    const auditRetentionMessage =
+      document.getElementById(
+        "auditRetentionMessage"
+      );
+
     const auditTotalCount =
       document.getElementById(
         "auditTotalCount"
@@ -4320,6 +4521,11 @@
 
     let requestGeneration = 0;
 
+    let refreshLifecycleGeneration = 0;
+
+    const refreshSettledScreens =
+      new Set();
+
     const managerDrafts =
       new Map();
 
@@ -4334,6 +4540,18 @@
 
     let holidayOverrides =
       [];
+
+    let promoRules =
+      [];
+
+    let promoRulesRequestGeneration =
+      0;
+
+    let promoRulesSaveInProgress =
+      false;
+
+    let activePromoRulesSaveRequestId =
+      null;
 
     let holidayRequestGeneration =
       0;
@@ -4391,6 +4609,13 @@
 
     let auditRequestGeneration =
       0;
+
+
+    let activeAuditRetentionRequestId =
+      null;
+
+    const AUDIT_RETENTION_STORAGE_KEY =
+      "miniGolfAuditRetentionDays";
 
     let scheduleTemplates =
       [];
@@ -4802,6 +5027,11 @@
       const currentGeneration =
         requestGeneration;
 
+      refreshLifecycleGeneration =
+        currentGeneration;
+
+      refreshSettledScreens.clear();
+
       lastRefreshElement.textContent =
         `Refreshing at ${formatLocalClock(new Date())}`;
 
@@ -4814,6 +5044,36 @@
           );
         }
       );
+    }
+
+    function markScreenRefreshSettled(
+      screenName,
+      generation
+    ) {
+      if (
+        generation !== requestGeneration ||
+        generation !== refreshLifecycleGeneration
+      ) {
+        return;
+      }
+
+      refreshSettledScreens.add(
+        screenName
+      );
+
+      if (
+        refreshSettledScreens.size <
+        SCREEN_NAMES.length
+      ) {
+        return;
+      }
+
+      refreshButton.classList.remove(
+        "refreshing"
+      );
+
+      lastRefreshElement.textContent =
+        `Last refreshed: ${formatLocalClock(new Date())}`;
     }
 
     function loadScreenSchedule(
@@ -4841,6 +5101,10 @@
           callbackCompleted = true;
 
           try {
+            if (generation !== requestGeneration) {
+              return;
+            }
+
             processScreenPayload(
               screenName,
               payload
@@ -4854,6 +5118,11 @@
             if (script) {
               script.remove();
             }
+
+            markScreenRefreshSettled(
+              screenName,
+              generation
+            );
           }
         };
 
@@ -4876,13 +5145,31 @@
 
       script.onerror =
         function() {
+          if (callbackCompleted) {
+            return;
+          }
+
           callbackCompleted = true;
 
           delete window[callbackName];
 
-          setScreenError(
+          const failedScript =
+            document.getElementById(scriptId);
+
+          if (failedScript) {
+            failedScript.remove();
+          }
+
+          if (generation === requestGeneration) {
+            setScreenError(
+              screenName,
+              "Could not connect to Apps Script."
+            );
+          }
+
+          markScreenRefreshSettled(
             screenName,
-            "Could not connect to Apps Script."
+            generation
           );
         };
 
@@ -4894,11 +5181,27 @@
             !callbackCompleted &&
             window[callbackName]
           ) {
+            callbackCompleted = true;
+
             delete window[callbackName];
 
-            setScreenError(
+            const timedOutScript =
+              document.getElementById(scriptId);
+
+            if (timedOutScript) {
+              timedOutScript.remove();
+            }
+
+            if (generation === requestGeneration) {
+              setScreenError(
+                screenName,
+                "Apps Script did not respond within 12 seconds."
+              );
+            }
+
+            markScreenRefreshSettled(
               screenName,
-              "Apps Script did not respond within 12 seconds."
+              generation
             );
           }
         },
@@ -4990,7 +5293,9 @@
         source:
           payload.scheduleSource === "holiday"
             ? "holiday"
-            : "regular",
+            : payload.scheduleSource === "promo"
+              ? "promo"
+              : "regular",
 
         activeDate:
           payload.activeDate || "",
@@ -5077,12 +5382,6 @@
         updateScheduleManager();
       }
 
-      lastRefreshElement.textContent =
-        `Last refreshed: ${formatLocalClock(new Date())}`;
-
-      refreshButton.classList.remove(
-        "refreshing"
-      );
     }
 
     function isValidScheduleItem(item) {
@@ -5937,10 +6236,6 @@
       previewOverlay.textContent =
         message;
 
-      refreshButton.classList.remove(
-        "refreshing"
-      );
-
       updateDashboardSummary();
     }
 
@@ -6421,6 +6716,9 @@
       const showHoliday =
         workspaceName === "holiday";
 
+      const showHolidaySchedule =
+        workspaceName === "holidaySchedule";
+
       const showBackups =
         workspaceName === "backups";
 
@@ -6460,6 +6758,11 @@
       holidayManagerTab.classList.toggle(
         "active",
         showHoliday
+      );
+
+      document.getElementById("holidayScheduleManagerTab").classList.toggle(
+        "active",
+        showHolidaySchedule
       );
 
       backupHistoryTab.classList.toggle(
@@ -6515,6 +6818,11 @@
       holidayManagerWorkspace.classList.toggle(
         "active",
         showHoliday
+      );
+
+      document.getElementById("holidayScheduleManagerWorkspace").classList.toggle(
+        "active",
+        showHolidaySchedule
       );
 
       backupHistoryWorkspace.classList.toggle(
@@ -6585,8 +6893,8 @@
       }
 
       if (showCalendar) {
-        if (holidayOverrides.length === 0) {
-          loadHolidayOverrides();
+        if (!holidayScheduleManagerFeedLoaded) {
+          loadHolidayScheduleDays(true);
         }
 
         renderHolidayCalendar();
@@ -8708,6 +9016,8 @@
           item.endDate || "",
         startTime:
           item.startTime || "",
+        endTime:
+          item.endTime || "",
         image:
           item.image || "",
         fade:
@@ -8793,6 +9103,8 @@
           ),
         startTime:
           "12:00",
+        endTime:
+          "",
         image:
           "",
         fade:
@@ -8861,7 +9173,10 @@
             ? ""
             : Number(input.value);
 
-      } else if (field === "startTime") {
+      } else if (
+        field === "startTime" ||
+        field === "endTime"
+      ) {
         const formatted =
           formatManagerTimeInput(
             input.value
@@ -8990,7 +9305,7 @@
       holidayTableBody.innerHTML = `
         <tr>
           <td
-            colspan="9"
+            colspan="10"
             class="manager-empty"
           >
             Loading Holiday Overrides…
@@ -9348,6 +9663,19 @@
           </td>
 
           <td>
+            <input
+              class="manager-input holiday-time-input ${rowErrors.endTime ? "invalid" : ""}"
+              type="text"
+              inputmode="numeric"
+              maxlength="5"
+              placeholder="Optional"
+              value="${escapeHtml(item.endTime || "")}"
+              data-row-index="${index}"
+              data-holiday-field="endTime"
+            >
+          </td>
+
+          <td>
             <div class="image-picker-field">
               <div class="image-picker-row">
                 <input
@@ -9474,6 +9802,10 @@
             ${escapeHtml(item.startTime || "—")}
           </td>
 
+          <td class="manager-time">
+            ${escapeHtml(item.endTime || "—")}
+          </td>
+
           <td class="holiday-image-name">
             ${escapeHtml(item.image || "—")}
           </td>
@@ -9595,9 +9927,22 @@
       }
 
       if (
-        today > item.endDate
+        today > item.endDate ||
+        (
+          today === item.endDate &&
+          item.endTime &&
+          currentTime >= item.endTime
+        )
       ) {
         return "expired";
+      }
+
+      if (
+        item.endTime &&
+        currentTime >= item.endTime &&
+        today < item.endDate
+      ) {
+        return "upcoming";
       }
 
       return "active";
@@ -9612,6 +9957,7 @@
         !String(item.startDate || "").trim() &&
         !String(item.endDate || "").trim() &&
         !String(item.startTime || "").trim() &&
+        !String(item.endTime || "").trim() &&
         !String(item.image || "").trim() &&
         (
           item.fade === "" ||
@@ -9712,6 +10058,10 @@
           String(item.startTime || "")
             .trim();
 
+        const endTime =
+          String(item.endTime || "")
+            .trim();
+
         const image =
           String(item.image || "")
             .trim();
@@ -9764,6 +10114,31 @@
           addError(
             "startTime",
             "enter a valid time in HH:MM format."
+          );
+        }
+
+        if (
+          endTime &&
+          !/^([01]\d|2[0-3]):[0-5]\d$/
+            .test(endTime)
+        ) {
+          addError(
+            "endTime",
+            "enter a valid optional end time in HH:MM format."
+          );
+        }
+
+        if (
+          endTime &&
+          /^([01]\d|2[0-3]):[0-5]\d$/
+            .test(endTime) &&
+          /^([01]\d|2[0-3]):[0-5]\d$/
+            .test(startTime) &&
+          endTime <= startTime
+        ) {
+          addError(
+            "endTime",
+            "end time must be later than start time."
           );
         }
 
@@ -9970,6 +10345,8 @@
               String(item.endDate).trim(),
             startTime:
               String(item.startTime).trim(),
+            endTime:
+              String(item.endTime || "").trim(),
             image:
               String(item.image).trim(),
             fade:
@@ -10107,6 +10484,12 @@
           </option>
           <option value="Holiday Overrides">
             Holiday Overrides
+          </option>
+          <option value="Holiday Schedule Days">
+            Holiday Schedule Days
+          </option>
+          <option value="Audit Log">
+            Audit Log
           </option>
         ` +
         SCREEN_NAMES
@@ -13131,6 +13514,214 @@
         "click",
         loadAuditLog
       );
+
+      const storedRetention =
+        localStorage.getItem(
+          AUDIT_RETENTION_STORAGE_KEY
+        );
+
+      if (
+        auditRetentionSelect &&
+        ["30", "60", "90", "forever"].includes(storedRetention)
+      ) {
+        auditRetentionSelect.value =
+          storedRetention;
+      }
+
+      updateAuditRetentionControls();
+
+      if (auditRetentionSelect) {
+        auditRetentionSelect.addEventListener(
+          "change",
+          updateAuditRetentionControls
+        );
+      }
+
+      if (saveAuditRetentionButton) {
+        saveAuditRetentionButton.addEventListener(
+          "click",
+          function() {
+            submitAuditRetentionAction(
+              "setAuditRetention"
+            );
+          }
+        );
+      }
+
+      if (clearOldAuditLogsButton) {
+        clearOldAuditLogsButton.addEventListener(
+          "click",
+          function() {
+            submitAuditRetentionAction(
+              "clearOldAuditLogs"
+            );
+          }
+        );
+      }
+
+      window.addEventListener(
+        "message",
+        handleAuditRetentionMessage
+      );
+    }
+
+
+    function updateAuditRetentionControls() {
+      if (!auditRetentionSelect || !clearOldAuditLogsButton) {
+        return;
+      }
+
+      clearOldAuditLogsButton.disabled =
+        auditRetentionSelect.value === "forever";
+
+      clearOldAuditLogsButton.title =
+        auditRetentionSelect.value === "forever"
+          ? "Choose a day-based retention period before clearing old logs."
+          : `Delete audit rows older than ${auditRetentionSelect.value} days.`;
+    }
+
+
+    function submitAuditRetentionAction(action) {
+      if (!auditRetentionSelect) {
+        return;
+      }
+
+      const retention =
+        auditRetentionSelect.value;
+
+      if (
+        action === "clearOldAuditLogs" &&
+        retention === "forever"
+      ) {
+        window.alert(
+          "Retention is set to Forever, so there are no old logs to clear by age."
+        );
+        return;
+      }
+
+      const pin = window.prompt(
+        action === "setAuditRetention"
+          ? "Enter the dashboard save PIN to update Audit Log retention:"
+          : `Enter the dashboard save PIN to delete audit rows older than ${retention} days:`
+      );
+
+      if (pin === null) {
+        return;
+      }
+
+      if (!String(pin).trim()) {
+        window.alert("A dashboard PIN is required.");
+        return;
+      }
+
+      const confirmation =
+        action === "setAuditRetention"
+          ? `Set Audit Log retention to ${retention === "forever" ? "Forever" : `${retention} days`}?`
+          : `Delete Audit Log rows older than ${retention} days now? This cannot be undone.`;
+
+      if (!window.confirm(confirmation)) {
+        return;
+      }
+
+      activeAuditRetentionRequestId =
+        createSaveRequestId();
+
+      const form =
+        document.getElementById(
+          "auditRetentionForm"
+        );
+
+      if (!form) {
+        return;
+      }
+
+      form.action =
+        SCHEDULE_FEED_URL;
+
+      document.getElementById(
+        "auditRetentionActionField"
+      ).value = action;
+
+      document.getElementById(
+        "auditRetentionPinField"
+      ).value = String(pin);
+
+      document.getElementById(
+        "auditRetentionDaysField"
+      ).value = retention;
+
+      document.getElementById(
+        "auditRetentionRequestIdField"
+      ).value = activeAuditRetentionRequestId;
+
+      if (auditRetentionMessage) {
+        auditRetentionMessage.textContent =
+          action === "setAuditRetention"
+            ? "Saving Audit Log retention…"
+            : "Clearing old Audit Log rows…";
+        auditRetentionMessage.className =
+          "promo-rules-message visible success";
+      }
+
+      form.submit();
+    }
+
+
+    function handleAuditRetentionMessage(event) {
+      const data =
+        event.data;
+
+      if (
+        !data ||
+        data.type !== "miniGolfAuditRetentionActionResult" ||
+        data.requestId !== activeAuditRetentionRequestId
+      ) {
+        return;
+      }
+
+      activeAuditRetentionRequestId =
+        null;
+
+      if (data.success !== true) {
+        if (auditRetentionMessage) {
+          auditRetentionMessage.textContent =
+            data.error ||
+            "Audit Log retention could not be updated.";
+          auditRetentionMessage.className =
+            "promo-rules-message visible error";
+        }
+        return;
+      }
+
+      const retention =
+        String(data.retention || auditRetentionSelect.value || "90");
+
+      if (["30", "60", "90", "forever"].includes(retention)) {
+        auditRetentionSelect.value = retention;
+        localStorage.setItem(
+          AUDIT_RETENTION_STORAGE_KEY,
+          retention
+        );
+      }
+
+      updateAuditRetentionControls();
+
+      if (auditRetentionMessage) {
+        if (data.operation === "clearOldAuditLogs") {
+          auditRetentionMessage.textContent =
+            `Cleared ${Number(data.rowsDeleted || 0)} old Audit Log row(s).`;
+        } else {
+          auditRetentionMessage.textContent =
+            `Audit Log retention saved as ${retention === "forever" ? "Forever" : `${retention} days`}.`;
+        }
+        auditRetentionMessage.className =
+          "promo-rules-message visible success";
+      }
+
+      setTimeout(
+        loadAuditLog,
+        400
+      );
     }
 
 
@@ -13414,7 +14005,23 @@
         action ===
         "saveHolidayOverrides"
       ) {
-        return "Holiday save";
+        return "Holiday Override save";
+      }
+
+      if (action === "saveHolidayScheduleDays") {
+        return "Holiday Schedule save";
+      }
+
+      if (action === "savePromoRules") {
+        return "Promo Rules save";
+      }
+
+      if (action === "setAuditRetention") {
+        return "Audit retention update";
+      }
+
+      if (action === "clearOldAuditLogs") {
+        return "Audit cleanup";
       }
 
       if (action === "restoreBackup") {
@@ -13482,12 +14089,7 @@
       reloadCalendarButton.addEventListener(
         "click",
         function() {
-          loadHolidayOverrides();
-
-          setTimeout(
-            renderHolidayCalendar,
-            500
-          );
+          loadHolidayScheduleDays(true);
         }
       );
 
@@ -13521,12 +14123,12 @@
 
       createHolidayForDateButton.addEventListener(
         "click",
-        createHolidayOverrideFromCalendar
+        createHolidayScheduleFromCalendar
       );
 
       editHolidayForDateButton.addEventListener(
         "click",
-        editHolidayOverridesFromCalendar
+        editHolidayScheduleFromCalendar
       );
     }
 
@@ -13649,11 +14251,11 @@
                 .map(item => `
                   <div
                     class="calendar-event calendar-event-${escapeHtml(item.status)}"
-                    title="${escapeHtml(item.screen)} · ${escapeHtml(item.startTime)} · ${escapeHtml(item.image)}"
+                    title="${escapeHtml(item.label || "Special / Holiday")} · ${escapeHtml(getHolidayScheduleCalendarSummary(item))}"
                   >
-                    ${escapeHtml(item.screen)}
+                    ${escapeHtml(item.label || "Special / Holiday")}
                     ·
-                    ${escapeHtml(item.startTime)}
+                    ${escapeHtml(getHolidayScheduleCalendarSummary(item))}
                   </div>
                 `)
                 .join("")}
@@ -13680,42 +14282,40 @@
     function getHolidayEventsForDate(
       dateText
     ) {
-      return holidayOverrides
-        .filter(item => {
-          if (
-            item.status === "invalid" ||
-            !item.startDate ||
-            !item.endDate
-          ) {
-            return false;
-          }
-
-          return (
-            dateText >= item.startDate &&
-            dateText <= item.endDate
-          );
-        })
+      return HOLIDAY_SCHEDULE_DAYS_ALL
+        .filter(item =>
+          item &&
+          item.date === dateText
+        )
         .map(item => ({
           ...item,
           status:
-            getCalendarEventStatus(
+            getHolidayScheduleCalendarStatus(
               item,
               dateText
             )
         }))
         .sort((a, b) =>
-          String(a.startTime)
+          String(a.label || "")
             .localeCompare(
-              String(b.startTime)
+              String(b.label || "")
             )
         );
     }
 
 
-    function getCalendarEventStatus(
+    function getHolidayScheduleCalendarStatus(
       item,
       dateText
     ) {
+      if (item.valid !== true) {
+        return "invalid";
+      }
+
+      if (item.enabled !== true) {
+        return "disabled";
+      }
+
       const today =
         formatDateForInput(
           new Date()
@@ -13729,9 +14329,28 @@
         return "upcoming";
       }
 
-      return getHolidayRowStatus(
-        item
-      );
+      return "active";
+    }
+
+
+    function getHolidayScheduleCalendarSummary(item) {
+      if (item.valid !== true) {
+        return "INVALID";
+      }
+
+      if (item.enabled !== true) {
+        return "DISABLED";
+      }
+
+      if (item.closed === true) {
+        return "CLOSED";
+      }
+
+      if (item.open && item.close) {
+        return `${item.open}–${item.close}`;
+      }
+
+      return "Special hours";
     }
 
 
@@ -13759,32 +14378,49 @@
       if (events.length === 0) {
         calendarDetailsList.innerHTML = `
           <div class="calendar-details-item">
-            No Holiday Overrides are active on this date.
+            No Holiday Schedule Day is configured for this date.
           </div>
         `;
 
       } else {
         calendarDetailsList.innerHTML =
           events
-            .map(item => `
-              <div class="calendar-details-item">
-                <div class="calendar-details-title">
-                  ${escapeHtml(item.screen)}
-                  ·
-                  ${escapeHtml(item.startTime)}
-                </div>
+            .map(item => {
+              const summary =
+                getHolidayScheduleCalendarSummary(item);
 
-                <div class="calendar-details-meta">
-                  ${escapeHtml(item.startDate)}
-                  →
-                  ${escapeHtml(item.endDate)}
-                  <br>
-                  ${escapeHtml(item.image)}
-                  ·
-                  ${escapeHtml(item.fade)} ms
+              const sourceTabs =
+                item.sourceTabs || {};
+
+              const problems =
+                Array.isArray(item.problems) && item.problems.length
+                  ? `<br>${escapeHtml(item.problems.join(" · "))}`
+                  : "";
+
+              const tabs =
+                item.closed === true
+                  ? "Holiday tabs: Not Used - Closed"
+                  : `Arcade: ${escapeHtml(sourceTabs.Arcade || "ArcadeHoliday")} · Golf: ${escapeHtml(sourceTabs.Golf || "GolfHoliday")} · Slush: ${escapeHtml(sourceTabs.Slush || "SlushHoliday")} · infoArcade: ${escapeHtml(sourceTabs.infoArcade || "infoArcadeHoliday")}`;
+
+              return `
+                <div class="calendar-details-item">
+                  <div class="calendar-details-title">
+                    ${escapeHtml(item.label || "Special / Holiday")}
+                    ·
+                    ${escapeHtml(summary)}
+                  </div>
+
+                  <div class="calendar-details-meta">
+                    ${item.enabled === true ? "Enabled" : "Disabled"}
+                    ·
+                    ${item.valid === true ? "Valid" : "Needs attention"}
+                    <br>
+                    ${tabs}
+                    ${problems}
+                  </div>
                 </div>
-              </div>
-            `)
+              `;
+            })
             .join("");
       }
 
@@ -13794,87 +14430,76 @@
     }
 
 
-    function createHolidayOverrideFromCalendar() {
+    function createHolidayScheduleFromCalendar() {
       if (!selectedCalendarDate) {
         return;
       }
 
-      if (!holidayDraft) {
-        holidayDraft =
-          cloneHolidayRows(
-            holidayOverrides
-          );
+      if (!holidayScheduleManagerFeedLoaded) {
+        window.alert(
+          "Holiday Schedule Days must finish loading before a new special day can be added."
+        );
+        loadHolidayScheduleDays(true);
+        return;
       }
 
-      holidayDraft.push({
-        screen:
-          SCREEN_NAMES[0] || "All",
+      const existingIndex =
+        holidayScheduleManagerRows.findIndex(
+          item => item.date === selectedCalendarDate
+        );
 
-        startDate:
-          selectedCalendarDate,
+      if (existingIndex >= 0) {
+        editHolidayScheduleFromCalendar();
+        return;
+      }
 
-        endDate:
-          selectedCalendarDate,
-
-        startTime:
-          "12:00",
-
-        image:
-          "",
-
-        fade:
-          1500
+      holidayScheduleManagerRows.push({
+        date: selectedCalendarDate,
+        label: "Special / Holiday",
+        open: "10:00",
+        close: "22:00",
+        arcadeTab: "ArcadeHoliday",
+        golfTab: "GolfHoliday",
+        slushTab: "SlushHoliday",
+        infoArcadeTab: "infoArcadeHoliday",
+        closed: false,
+        enabled: true
       });
 
-      persistHolidayDraft(
-        holidayDraft
+      holidayScheduleManagerRows.sort(
+        (a, b) =>
+          String(a.date).localeCompare(String(b.date))
       );
 
-      holidayEditingEnabled =
-        true;
-
-      holidayScreenFilter.value =
-        "all";
-
-      holidayStatusFilter.value =
-        "all";
-
-      updateHolidayEditingControls();
-
-      openWorkspace(
-        "holiday"
-      );
-
-      renderHolidayOverrides();
+      openWorkspace("holidaySchedule");
+      renderHolidayScheduleManager();
 
       setTimeout(
         function() {
-          const rows =
-            holidayTableBody.querySelectorAll(
-              "tr"
+          const index =
+            holidayScheduleManagerRows.findIndex(
+              item => item.date === selectedCalendarDate
             );
 
-          const lastRow =
-            rows[
-              rows.length - 1
-            ];
+          const row =
+            document.querySelector(
+              `[data-holiday-schedule-row="${index}"]`
+            );
 
-          if (lastRow) {
-            lastRow.scrollIntoView({
-              behavior:
-                "smooth",
-
-              block:
-                "center"
+          if (row) {
+            row.scrollIntoView({
+              behavior: "smooth",
+              block: "center"
             });
 
-            const firstInput =
-              lastRow.querySelector(
-                "[data-holiday-field]"
+            const labelInput =
+              row.querySelector(
+                '[data-hsd-field="label"]'
               );
 
-            if (firstInput) {
-              firstInput.focus();
+            if (labelInput) {
+              labelInput.focus();
+              labelInput.select();
             }
           }
         },
@@ -13883,84 +14508,52 @@
     }
 
 
-    function editHolidayOverridesFromCalendar() {
+    function editHolidayScheduleFromCalendar() {
       if (!selectedCalendarDate) {
         return;
       }
 
-      if (!holidayDraft) {
-        holidayDraft =
-          cloneHolidayRows(
-            holidayOverrides
-          );
+      if (!holidayScheduleManagerFeedLoaded) {
+        window.alert(
+          "Holiday Schedule Days must finish loading before they can be edited."
+        );
+        loadHolidayScheduleDays(true);
+        return;
       }
 
-      holidayEditingEnabled =
-        true;
-
-      holidayScreenFilter.value =
-        "all";
-
-      holidayStatusFilter.value =
-        "all";
-
-      updateHolidayEditingControls();
-
-      openWorkspace(
-        "holiday"
-      );
-
-      renderHolidayOverrides();
+      openWorkspace("holidaySchedule");
+      renderHolidayScheduleManager();
 
       setTimeout(
         function() {
-          const rows =
-            Array.from(
-              holidayTableBody.querySelectorAll(
-                "tr"
-              )
+          const index =
+            holidayScheduleManagerRows.findIndex(
+              item => item.date === selectedCalendarDate
             );
 
-          const targetIndex =
-            holidayDraft.findIndex(
-              item =>
-                item.startDate &&
-                item.endDate &&
-                selectedCalendarDate >=
-                  item.startDate &&
-                selectedCalendarDate <=
-                  item.endDate
-            );
-
-          if (
-            targetIndex < 0 ||
-            !rows[targetIndex]
-          ) {
+          if (index < 0) {
             return;
           }
 
-          const targetRow =
-            rows[targetIndex];
-
-          targetRow.classList.add(
-            "active-selection"
-          );
-
-          targetRow.scrollIntoView({
-            behavior:
-              "smooth",
-
-            block:
-              "center"
-          });
-
-          const firstInput =
-            targetRow.querySelector(
-              "[data-holiday-field]"
+          const row =
+            document.querySelector(
+              `[data-holiday-schedule-row="${index}"]`
             );
 
-          if (firstInput) {
-            firstInput.focus();
+          if (row) {
+            row.scrollIntoView({
+              behavior: "smooth",
+              block: "center"
+            });
+
+            const firstInput =
+              row.querySelector(
+                "[data-hsd-field]"
+              );
+
+            if (firstInput) {
+              firstInput.focus();
+            }
           }
         },
         100
@@ -17160,6 +17753,18 @@
           state.source,
         activeDate:
           state.activeDate || "",
+        logicalScreen:
+          state.logicalScreen || screenName,
+        routeProfile:
+          state.routeProfile || "",
+        routeKey:
+          state.routeKey || "",
+        routeSourceTab:
+          state.routeSourceTab || "",
+        routeLabel:
+          state.routeLabel || "",
+        legacyRequest:
+          state.legacyRequest || "",
         schedule:
           state.schedule,
         savedAt:
@@ -17257,10 +17862,43 @@
         source:
           snapshot.source === "holiday"
             ? "holiday"
-            : "regular",
+            : snapshot.source === "promo"
+              ? "promo"
+              : "regular",
 
         activeDate:
           snapshot.activeDate || "",
+
+        logicalScreen:
+          String(
+            snapshot.logicalScreen ||
+            screenName
+          ),
+
+        routeProfile:
+          String(
+            snapshot.routeProfile || ""
+          ),
+
+        routeKey:
+          String(
+            snapshot.routeKey || ""
+          ),
+
+        routeSourceTab:
+          String(
+            snapshot.routeSourceTab || ""
+          ),
+
+        routeLabel:
+          String(
+            snapshot.routeLabel || ""
+          ),
+
+        legacyRequest:
+          String(
+            snapshot.legacyRequest || ""
+          ),
 
         schedule:
           snapshot.schedule,
@@ -19345,6 +19983,733 @@
       animateDashboardNumber(deploymentElement, deployedCount, { suffix: `/${SCREEN_NAMES.length}` });
     }
 
+    /*
+     * =====================================================
+     * VERSION 1.4 — BUILD 114
+     * RECURRING PROMO DAY MANAGER
+     * =====================================================
+     */
+
+    const PROMO_DAY_NAMES = [
+      "Sunday",
+      "Monday",
+      "Tuesday",
+      "Wednesday",
+      "Thursday",
+      "Friday",
+      "Saturday"
+    ];
+
+
+    function getDefaultPromoRules() {
+      return [
+        {
+          enabled: false,
+          profile: "regular",
+          screen: "Golf",
+          day: "Wednesday",
+          sourceTab: "GolfPromoWednesday",
+          label: "Golf Wednesday Promo"
+        },
+        {
+          enabled: false,
+          profile: "regular",
+          screen: "Arcade",
+          day: "Thursday",
+          sourceTab: "ArcadePromoThursday",
+          label: "Arcade Thursday Promo"
+        }
+      ];
+    }
+
+
+    function normalizePromoRulesForDashboard(
+      rules
+    ) {
+      const source =
+        Array.isArray(rules) &&
+        rules.length > 0
+          ? rules
+          : getDefaultPromoRules();
+
+      return source.map(item => ({
+        enabled:
+          item.enabled === true ||
+          String(item.enabled).toLowerCase() === "true",
+
+        profile:
+          ["regular", "summer", "all"].includes(
+            String(item.profile || "").toLowerCase()
+          )
+            ? String(item.profile).toLowerCase()
+            : "regular",
+
+        screen:
+          SCREEN_NAMES.includes(item.screen)
+            ? item.screen
+            : SCREEN_NAMES[0],
+
+        day:
+          PROMO_DAY_NAMES.includes(item.day)
+            ? item.day
+            : "Wednesday",
+
+        sourceTab:
+          String(item.sourceTab || "").trim(),
+
+        label:
+          String(item.label || "").trim()
+      }));
+    }
+
+
+    function loadPromoRules() {
+      promoRulesRequestGeneration += 1;
+
+      const generation =
+        promoRulesRequestGeneration;
+
+      const callbackName =
+        `promoRulesCallback_${generation}`;
+
+      const script =
+        document.createElement("script");
+
+      const separator =
+        SCHEDULE_FEED_URL.includes("?")
+          ? "&"
+          : "?";
+
+      window[callbackName] =
+        function(payload) {
+          try {
+            if (
+              !payload ||
+              payload.success !== true ||
+              !Array.isArray(payload.rules)
+            ) {
+              throw new Error(
+                payload && payload.error
+                  ? payload.error
+                  : "Promo Rules feed is invalid."
+              );
+            }
+
+            promoRules =
+              normalizePromoRulesForDashboard(
+                payload.rules
+              );
+
+            renderPromoRules();
+
+          } catch (error) {
+            promoRules =
+              getDefaultPromoRules();
+
+            renderPromoRules(
+              error.message || error
+            );
+
+          } finally {
+            delete window[callbackName];
+            script.remove();
+          }
+        };
+
+      script.src =
+        `${SCHEDULE_FEED_URL}` +
+        `${separator}action=promoManager` +
+        `&callback=${callbackName}` +
+        `&_=${Date.now()}`;
+
+      script.onerror =
+        function() {
+          delete window[callbackName];
+
+          promoRules =
+            getDefaultPromoRules();
+
+          renderPromoRules(
+            "Could not load Promo Rules from Apps Script."
+          );
+
+          script.remove();
+        };
+
+      document.head.appendChild(
+        script
+      );
+    }
+
+
+    function renderPromoRules(
+      errorMessage = ""
+    ) {
+      const list =
+        document.getElementById(
+          "promoRulesList"
+        );
+
+      const status =
+        document.getElementById(
+          "promoRulesStatus"
+        );
+
+      const message =
+        document.getElementById(
+          "promoRulesMessage"
+        );
+
+      if (
+        !list ||
+        !status
+      ) {
+        return;
+      }
+
+      const enabledCount =
+        promoRules.filter(
+          item => item.enabled
+        ).length;
+
+      status.textContent =
+        `${enabledCount} enabled · ${promoRules.length} rule${promoRules.length === 1 ? "" : "s"}`;
+
+      list.innerHTML =
+        promoRules
+          .map((rule, index) => `
+            <article class="promo-rule-card ${rule.enabled ? "promo-rule-enabled" : ""}">
+              <label class="promo-rule-toggle">
+                <input
+                  type="checkbox"
+                  data-promo-index="${index}"
+                  data-promo-field="enabled"
+                  ${rule.enabled ? "checked" : ""}
+                >
+                <span>${rule.enabled ? "ON" : "OFF"}</span>
+              </label>
+
+              <label>
+                <span>Profile</span>
+                <select
+                  class="manager-select"
+                  data-promo-index="${index}"
+                  data-promo-field="profile"
+                >
+                  <option value="regular" ${rule.profile === "regular" ? "selected" : ""}>Regular</option>
+                  <option value="summer" ${rule.profile === "summer" ? "selected" : ""}>Summer</option>
+                  <option value="all" ${rule.profile === "all" ? "selected" : ""}>All profiles</option>
+                </select>
+              </label>
+
+              <label>
+                <span>Screen</span>
+                <select
+                  class="manager-select"
+                  data-promo-index="${index}"
+                  data-promo-field="screen"
+                >
+                  ${SCREEN_NAMES.map(name => `
+                    <option value="${escapeHtml(name)}" ${name === rule.screen ? "selected" : ""}>
+                      ${escapeHtml(name)}
+                    </option>
+                  `).join("")}
+                </select>
+              </label>
+
+              <label>
+                <span>Day</span>
+                <select
+                  class="manager-select"
+                  data-promo-index="${index}"
+                  data-promo-field="day"
+                >
+                  ${PROMO_DAY_NAMES.map(day => `
+                    <option value="${day}" ${day === rule.day ? "selected" : ""}>
+                      ${day}
+                    </option>
+                  `).join("")}
+                </select>
+              </label>
+
+              <label class="promo-rule-source">
+                <span>Source tab</span>
+                <input
+                  class="manager-input"
+                  type="text"
+                  value="${escapeHtml(rule.sourceTab)}"
+                  data-promo-index="${index}"
+                  data-promo-field="sourceTab"
+                  placeholder="GolfPromoWednesday"
+                >
+              </label>
+
+              <label class="promo-rule-label">
+                <span>Label</span>
+                <input
+                  class="manager-input"
+                  type="text"
+                  value="${escapeHtml(rule.label)}"
+                  data-promo-index="${index}"
+                  data-promo-field="label"
+                  placeholder="Promo name"
+                >
+              </label>
+
+              <button
+                class="manager-icon-button danger"
+                type="button"
+                data-delete-promo-index="${index}"
+              >
+                Delete
+              </button>
+            </article>
+          `)
+          .join("");
+
+      if (message) {
+        message.textContent =
+          errorMessage;
+
+        message.className =
+          errorMessage
+            ? "promo-rules-message visible error"
+            : "promo-rules-message";
+      }
+    }
+
+
+    function handlePromoRuleInput(
+      event
+    ) {
+      const input =
+        event.target.closest(
+          "[data-promo-field]"
+        );
+
+      if (!input) {
+        return;
+      }
+
+      const index =
+        Number(
+          input.dataset.promoIndex
+        );
+
+      const field =
+        input.dataset.promoField;
+
+      if (
+        !Number.isInteger(index) ||
+        !promoRules[index]
+      ) {
+        return;
+      }
+
+      promoRules[index][field] =
+        field === "enabled"
+          ? Boolean(input.checked)
+          : input.value;
+
+      renderPromoRules();
+    }
+
+
+    function savePromoRules() {
+      if (promoRulesSaveInProgress) {
+        return;
+      }
+
+      const cleaned =
+        normalizePromoRulesForDashboard(
+          promoRules
+        );
+
+      for (
+        let index = 0;
+        index < cleaned.length;
+        index += 1
+      ) {
+        const rule =
+          cleaned[index];
+
+        if (!rule.sourceTab) {
+          window.alert(
+            `Promo rule ${index + 1} needs a Source tab.`
+          );
+          return;
+        }
+      }
+
+      const pin =
+        window.prompt(
+          "Enter the dashboard save PIN for Promo Rules:"
+        );
+
+      if (pin === null) {
+        return;
+      }
+
+      if (!String(pin).trim()) {
+        window.alert(
+          "A save PIN is required."
+        );
+        return;
+      }
+
+      if (
+        !window.confirm(
+          "Save these recurring Promo Rules to Google Sheets?\n\nEnabled rules can automatically change the source schedule on their configured weekday."
+        )
+      ) {
+        return;
+      }
+
+      activePromoRulesSaveRequestId =
+        createSaveRequestId();
+
+      promoRulesSaveInProgress =
+        true;
+
+      const form =
+        document.getElementById(
+          "promoSaveForm"
+        );
+
+      form.action =
+        SCHEDULE_FEED_URL;
+
+      document.getElementById(
+        "promoSavePinField"
+      ).value =
+        String(pin);
+
+      document.getElementById(
+        "promoSaveDataField"
+      ).value =
+        JSON.stringify(cleaned);
+
+      document.getElementById(
+        "promoSaveRequestIdField"
+      ).value =
+        activePromoRulesSaveRequestId;
+
+      const message =
+        document.getElementById(
+          "promoRulesMessage"
+        );
+
+      if (message) {
+        message.textContent =
+          "Saving Promo Rules…";
+
+        message.className =
+          "promo-rules-message visible success";
+      }
+
+      form.submit();
+    }
+
+
+    function handlePromoRulesSaveMessage(
+      event
+    ) {
+      const data =
+        event.data;
+
+      if (
+        !data ||
+        data.type !== "miniGolfPromoRulesSaveResult" ||
+        data.requestId !==
+          activePromoRulesSaveRequestId
+      ) {
+        return;
+      }
+
+      promoRulesSaveInProgress =
+        false;
+
+      activePromoRulesSaveRequestId =
+        null;
+
+      const message =
+        document.getElementById(
+          "promoRulesMessage"
+        );
+
+      if (data.success !== true) {
+        if (message) {
+          message.textContent =
+            data.error ||
+            "Promo Rules could not be saved.";
+
+          message.className =
+            "promo-rules-message visible error";
+        }
+
+        return;
+      }
+
+      if (message) {
+        message.textContent =
+          `Saved ${data.rowsWritten} Promo Rule(s). Routing cache was refreshed.`;
+
+        message.className =
+          "promo-rules-message visible success";
+      }
+
+      setTimeout(
+        function() {
+          loadPromoRules();
+          refreshDashboard();
+        },
+        500
+      );
+    }
+
+
+
+    let holidayScheduleManagerRows = [];
+    let holidayScheduleSaveInProgress = false;
+    let activeHolidayScheduleSaveRequestId = null;
+
+    function normalizeHolidayScheduleManagerRows(days) {
+      return (Array.isArray(days) ? days : []).map(day => ({
+        date: String(day.date || ""), label: String(day.label || ""),
+        open: String(day.open || ""), close: String(day.close || ""),
+        arcadeTab: String((day.sourceTabs && day.sourceTabs.Arcade) || "ArcadeHoliday"),
+        golfTab: String((day.sourceTabs && day.sourceTabs.Golf) || "GolfHoliday"),
+        slushTab: String((day.sourceTabs && day.sourceTabs.Slush) || "SlushHoliday"),
+        infoArcadeTab: String((day.sourceTabs && day.sourceTabs.infoArcade) || "infoArcadeHoliday"),
+        closed: day.closed === true, enabled: day.enabled === true
+      }));
+    }
+
+    function renderHolidayScheduleManager() {
+      const body = document.getElementById("holidayScheduleManagerBody");
+      const status = document.getElementById("holidayScheduleManagerStatus");
+      if (!body) return;
+      if (!holidayScheduleManagerRows.length) {
+        body.innerHTML = '<tr><td colspan="11" class="manager-empty">No Holiday Schedule Days configured.</td></tr>';
+      } else {
+        body.innerHTML = holidayScheduleManagerRows.map((row,index) => {
+          const isDisabled = row.enabled !== true;
+          const badgeClass = isDisabled
+            ? "holiday-day-badge-disabled"
+            : row.closed
+              ? "holiday-day-badge-closed"
+              : "holiday-day-badge-open";
+          const badgeText = isDisabled
+            ? "Disabled"
+            : row.closed
+              ? "Closed day"
+              : "Open day";
+          const rowClass = [
+            row.closed ? "holiday-row-closed" : "holiday-row-open",
+            isDisabled ? "holiday-row-disabled" : ""
+          ].filter(Boolean).join(" ");
+
+          return `
+          <tr class="${rowClass}" data-holiday-schedule-row="${index}">
+            <td><input class="holiday-schedule-input" type="date" data-hsd-field="date" data-hsd-index="${index}" value="${escapeHtml(row.date)}"></td>
+            <td>
+              <div class="holiday-label-stack">
+                <input class="holiday-schedule-input" data-hsd-field="label" data-hsd-index="${index}" value="${escapeHtml(row.label)}">
+                <span class="holiday-day-badge ${badgeClass}">${badgeText}</span>
+              </div>
+            </td>
+            <td><input class="holiday-schedule-input" type="time" data-hsd-field="open" data-hsd-index="${index}" value="${escapeHtml(row.open)}" ${row.closed?'disabled':''}></td>
+            <td><input class="holiday-schedule-input" type="time" data-hsd-field="close" data-hsd-index="${index}" value="${escapeHtml(row.close)}" ${row.closed?'disabled':''}></td>
+            <td><input class="holiday-schedule-input holiday-schedule-tab-input" data-hsd-field="arcadeTab" data-hsd-index="${index}" value="${escapeHtml(row.closed ? "Not Used - Closed" : row.arcadeTab)}" ${row.closed?'disabled':''}></td>
+            <td><input class="holiday-schedule-input holiday-schedule-tab-input" data-hsd-field="golfTab" data-hsd-index="${index}" value="${escapeHtml(row.closed ? "Not Used - Closed" : row.golfTab)}" ${row.closed?'disabled':''}></td>
+            <td><input class="holiday-schedule-input holiday-schedule-tab-input" data-hsd-field="slushTab" data-hsd-index="${index}" value="${escapeHtml(row.closed ? "Not Used - Closed" : row.slushTab)}" ${row.closed?'disabled':''}></td>
+            <td><input class="holiday-schedule-input holiday-schedule-tab-input" data-hsd-field="infoArcadeTab" data-hsd-index="${index}" value="${escapeHtml(row.closed ? "Not Used - Closed" : row.infoArcadeTab)}" ${row.closed?'disabled':''}></td>
+            <td class="holiday-schedule-check"><input type="checkbox" data-hsd-field="closed" data-hsd-index="${index}" ${row.closed?'checked':''}></td>
+            <td class="holiday-schedule-check"><input type="checkbox" data-hsd-field="enabled" data-hsd-index="${index}" ${row.enabled?'checked':''}></td>
+            <td><button class="button button-danger" type="button" data-hsd-delete="${index}">Delete</button></td>
+          </tr>`;
+        }).join("");
+      }
+      if (status) status.textContent = `${holidayScheduleManagerRows.length} special day${holidayScheduleManagerRows.length===1?'':'s'}`;
+    }
+
+    function syncHolidayScheduleManagerFromFeed() {
+      holidayScheduleManagerRows = normalizeHolidayScheduleManagerRows(
+        HOLIDAY_SCHEDULE_DAYS_ALL
+      ).sort((a,b) => a.date.localeCompare(b.date));
+      renderHolidayScheduleManager();
+    }
+
+    function addHolidayScheduleManagerRow() {
+      if (!holidayScheduleManagerFeedLoaded) {
+        window.alert("Holiday Schedule Days must finish loading before a new row can be added.");
+        return;
+      }
+      holidayScheduleManagerRows.push({date:"",label:"Special / Holiday",open:"10:00",close:"22:00",arcadeTab:"ArcadeHoliday",golfTab:"GolfHoliday",slushTab:"SlushHoliday",infoArcadeTab:"infoArcadeHoliday",closed:false,enabled:true});
+      renderHolidayScheduleManager();
+    }
+
+    function handleHolidayScheduleManagerInput(event) {
+      const el = event.target.closest("[data-hsd-field]");
+      if (!el) return;
+      const index = Number(el.dataset.hsdIndex), field = el.dataset.hsdField;
+      if (!Number.isInteger(index) || !holidayScheduleManagerRows[index]) return;
+      holidayScheduleManagerRows[index][field] = (field === "closed" || field === "enabled") ? Boolean(el.checked) : el.value;
+      if (field === "closed") renderHolidayScheduleManager();
+    }
+
+    function saveHolidayScheduleManager() {
+      if (holidayScheduleSaveInProgress) return;
+      if (!holidayScheduleManagerFeedLoaded) {
+        window.alert("Holiday Schedule Days have not loaded successfully yet. Reload them before saving so existing Google Sheets rows cannot be overwritten.");
+        return;
+      }
+      const rows = holidayScheduleManagerRows.map(row => ({
+        date: row.date.trim(), label: row.label.trim(), open: row.open, close: row.close,
+        sourceTabs:{Arcade:row.arcadeTab.trim(),Golf:row.golfTab.trim(),Slush:row.slushTab.trim(),infoArcade:row.infoArcadeTab.trim()},
+        closed: row.closed === true, enabled: row.enabled === true
+      }));
+      const holidayDateRows = new Map();
+      for (let i=0;i<rows.length;i++) {
+        const r=rows[i];
+        if (!r.date) { window.alert(`Holiday Schedule row ${i+1} needs a date.`); return; }
+        if (holidayDateRows.has(r.date)) {
+          const firstRow = holidayDateRows.get(r.date) + 1;
+          window.alert(`Holiday Schedule rows ${firstRow} and ${i+1} use the same date (${r.date}). Each date can only appear once.`);
+          return;
+        }
+        holidayDateRows.set(r.date, i);
+        if (!r.closed && (!r.open || !r.close || r.close <= r.open)) { window.alert(`Holiday Schedule row ${i+1} needs valid opening and closing times.`); return; }
+      }
+      const pin=window.prompt("Enter the dashboard save PIN for Holiday Schedules:");
+      if (pin===null) return;
+      if (!String(pin).trim()) { window.alert("A save PIN is required."); return; }
+      if (!window.confirm(`Save ${rows.length} Holiday Schedule Day(s) to Google Sheets?`)) return;
+      activeHolidayScheduleSaveRequestId=createSaveRequestId(); holidayScheduleSaveInProgress=true;
+      const form=document.getElementById("holidayScheduleSaveForm"); form.action=SCHEDULE_FEED_URL;
+      document.getElementById("holidayScheduleSavePinField").value=String(pin);
+      document.getElementById("holidayScheduleSaveDataField").value=JSON.stringify(rows);
+      document.getElementById("holidayScheduleSaveRequestIdField").value=activeHolidayScheduleSaveRequestId;
+      const msg=document.getElementById("holidayScheduleManagerMessage"); msg.textContent="Saving Holiday Schedules…"; msg.className="promo-rules-message visible success";
+      form.submit();
+    }
+
+    function handleHolidayScheduleSaveMessage(event) {
+      const data=event.data;
+      if (!data || data.type!=="miniGolfHolidayScheduleDaysSaveResult" || data.requestId!==activeHolidayScheduleSaveRequestId) return;
+      holidayScheduleSaveInProgress=false; activeHolidayScheduleSaveRequestId=null;
+      const msg=document.getElementById("holidayScheduleManagerMessage");
+      if (data.success!==true) { msg.textContent=data.error||"Holiday Schedules could not be saved."; msg.className="promo-rules-message visible error"; return; }
+      msg.textContent=`Saved ${data.rowsWritten} Holiday Schedule Day(s). Routing cache was refreshed.`; msg.className="promo-rules-message visible success";
+      setTimeout(()=>{ loadHolidayScheduleDays(true); refreshDashboard(); },500);
+    }
+
+    function setupHolidayScheduleManager() {
+      const body=document.getElementById("holidayScheduleManagerBody"); if (!body) return;
+      body.addEventListener("input",handleHolidayScheduleManagerInput); body.addEventListener("change",handleHolidayScheduleManagerInput);
+      body.addEventListener("click",event=>{ const b=event.target.closest("[data-hsd-delete]"); if(!b)return; holidayScheduleManagerRows.splice(Number(b.dataset.hsdDelete),1); renderHolidayScheduleManager(); });
+      document.getElementById("holidayScheduleAddButton").addEventListener("click",addHolidayScheduleManagerRow);
+      document.getElementById("holidayScheduleReloadButton").addEventListener("click",()=>loadHolidayScheduleDays(true));
+      document.getElementById("holidayScheduleSaveButton").addEventListener("click",saveHolidayScheduleManager);
+      window.addEventListener("message",handleHolidayScheduleSaveMessage);
+    }
+
+    function setupPromoRules() {
+      const list =
+        document.getElementById(
+          "promoRulesList"
+        );
+
+      if (!list) {
+        return;
+      }
+
+      list.addEventListener(
+        "change",
+        handlePromoRuleInput
+      );
+
+      list.addEventListener(
+        "input",
+        handlePromoRuleInput
+      );
+
+      list.addEventListener(
+        "click",
+        function(event) {
+          const button =
+            event.target.closest(
+              "[data-delete-promo-index]"
+            );
+
+          if (!button) {
+            return;
+          }
+
+          const index =
+            Number(
+              button.dataset.deletePromoIndex
+            );
+
+          if (
+            Number.isInteger(index) &&
+            promoRules[index]
+          ) {
+            promoRules.splice(
+              index,
+              1
+            );
+
+            renderPromoRules();
+          }
+        }
+      );
+
+      document.getElementById(
+        "addPromoRuleButton"
+      ).addEventListener(
+        "click",
+        function() {
+          promoRules.push({
+            enabled: false,
+            profile: "regular",
+            screen: "Golf",
+            day: "Wednesday",
+            sourceTab: "",
+            label: "New Promo"
+          });
+
+          renderPromoRules();
+        }
+      );
+
+      document.getElementById(
+        "reloadPromoRulesButton"
+      ).addEventListener(
+        "click",
+        loadPromoRules
+      );
+
+      document.getElementById(
+        "savePromoRulesButton"
+      ).addEventListener(
+        "click",
+        savePromoRules
+      );
+
+      window.addEventListener(
+        "message",
+        handlePromoRulesSaveMessage
+      );
+
+      promoRules =
+        getDefaultPromoRules();
+
+      renderPromoRules();
+      loadPromoRules();
+    }
+
+
     function renderScheduleRouting(
       date = new Date()
     ) {
@@ -19370,8 +20735,15 @@
           date
         );
 
+      const businessProfileResult =
+        getBusinessProfileForDate(
+          date
+        );
+
       badge.textContent =
-        profile.label;
+        businessProfileResult.special
+          ? businessProfileResult.profile.label
+          : profile.label;
 
       const rows =
         SCREEN_NAMES.map(
@@ -19403,11 +20775,17 @@
               };
             }
 
+            const isHolidayScheduleDay =
+              state.source === "holiday" &&
+              String(state.routeKey || "").startsWith("holiday-schedule-");
+
             const source =
               state.source === "holiday"
-                ? "Holiday Override"
-                : state.routeSourceTab ||
-                  "Unknown source";
+                ? (isHolidayScheduleDay ? "Holiday Schedule" : "Holiday Override")
+                : state.source === "promo"
+                  ? "Promo Day"
+                  : state.routeSourceTab ||
+                    "Unknown source";
 
             const detailParts =
               [];
@@ -19422,7 +20800,15 @@
               state.source === "holiday"
             ) {
               detailParts.push(
-                "Special/Holiday override has priority"
+                isHolidayScheduleDay
+                  ? "Holiday Schedule has priority"
+                  : "Special/Holiday override has priority"
+              );
+            } else if (
+              state.source === "promo"
+            ) {
+              detailParts.push(
+                "Recurring Promo Day override is active"
               );
             }
 
@@ -21022,8 +22408,15 @@
       if (
         releaseNotesCurrentBuild
       ) {
+        const releaseStatusLabel =
+          String(
+            release.status ||
+            release.channel ||
+            "Development"
+          ).trim();
+
         releaseNotesCurrentBuild.textContent =
-          `${buildLabel} · Stable Release`;
+          `${buildLabel} · ${releaseStatusLabel}`;
       }
 
       document
@@ -21624,7 +23017,7 @@
 
       saveNotificationSnoozes();
       closeNotificationSnoozeMenu();
-      renderNotificationCenter();
+      renderNotificationCenter({ force: true });
 
       if (
         typeof showToast === "function"
@@ -21638,21 +23031,15 @@
 
 
     function openNotificationSnoozeMenu(
-      event,
+      button,
       fingerprint
     ) {
-      if (!notificationSnoozeMenu) {
+      if (!notificationSnoozeMenu || !button) {
         return;
       }
 
-      event.preventDefault();
-      event.stopPropagation();
-
       notificationSnoozeTargetFingerprint =
         fingerprint;
-
-      const button =
-        event.currentTarget;
 
       const rectangle =
         button.getBoundingClientRect();
@@ -21963,7 +23350,7 @@
 
       saveNotificationPreferences();
       closeNotificationPreferences();
-      renderNotificationCenter();
+      renderNotificationCenter({ force: true });
 
       if (
         typeof showToast === "function"
@@ -21984,7 +23371,7 @@
 
       saveNotificationPreferences();
       populateNotificationPreferencesForm();
-      renderNotificationCenter();
+      renderNotificationCenter({ force: true });
 
       if (
         typeof showToast === "function"
@@ -22118,7 +23505,7 @@
         addNotificationHistoryEvent(notification,"reviewed","Marked as reviewed."));
 
       saveNotificationMemory();
-      renderNotificationCenter();
+      renderNotificationCenter({ force: true });
 
       if (
         typeof showToast === "function"
@@ -22251,8 +23638,31 @@
       return items;
     }
 
-    function renderNotificationCenter() {
+    function renderNotificationCenter(options = {}) {
       if (!notificationCenterBadge || !notificationCenterSummary || !notificationCenterList) return;
+
+      const forceOpenPanelRefresh = options.force === true;
+      const notificationPanelIsOpen = Boolean(
+        notificationCenterOverlay &&
+        !notificationCenterOverlay.hidden
+      );
+
+      /*
+       * Build 114.4 — Notification Center open-panel render stability
+       *
+       * The Dashboard has several background render pipelines (health,
+       * heartbeat, Mission Control) that can call renderNotificationCenter()
+       * while the user is actively hovering/clicking inside the dialog.
+       * Rollout Assistant history showed that live DOM churn can destabilize
+       * pointer/hover state. While Notifications is open, treat it as a
+       * stable snapshot unless the user explicitly refreshes or performs an
+       * action that requires a redraw. Background telemetry continues to run;
+       * it simply cannot mutate the open Notification Center DOM.
+       */
+      if (notificationPanelIsOpen && !forceOpenPanelRefresh) {
+        return;
+      }
+
       removeExpiredNotificationSnoozes();
 
       const allItems =
@@ -22307,8 +23717,16 @@
           snoozedItems.length > 0
             ? `No visible alerts · ${snoozedItems.length} snoozed.`
             : "No active alerts. Core monitoring checks are clear.";
-        notificationCenterList.innerHTML =
+        const emptyNotificationHtml =
           '<div class="notification-center-empty">✅ Everything currently looks good.<br>New alerts will appear here automatically.</div>';
+
+        // Build 114.3.2 — preserve the existing notification DOM when
+        // its rendered content has not changed. Background Dashboard
+        // refreshes can call this renderer frequently; replacing identical
+        // buttons on every pass resets :hover and causes visible flicker.
+        if (notificationCenterList.innerHTML !== emptyNotificationHtml) {
+          notificationCenterList.innerHTML = emptyNotificationHtml;
+        }
         return;
       }
 
@@ -22323,11 +23741,14 @@
           ? `${unreadCount} new · ${items.length} visible${snoozedItems.length ? ` · ${snoozedItems.length} snoozed` : ""}${critical ? ` · ${critical} critical` : ""}.`
           : `${items.length} visible, all reviewed${snoozedItems.length ? ` · ${snoozedItems.length} snoozed` : ""}${critical ? ` · ${critical} critical` : ""}.`;
 
-      notificationCenterList.innerHTML = items.map((item,index) => `
-        <button
+      const nextNotificationListHtml = items.map(item => {
+        const encodedFingerprint =
+          encodeURIComponent(item.fingerprint);
+
+        return `
+        <div
           class="notification-item notification-item-${escapeHtml(item.severity)} ${item.unread ? "notification-item-unread" : "notification-item-read"}"
-          type="button"
-          data-notification-index="${index}"
+          data-notification-fingerprint="${encodedFingerprint}"
         >
           <span class="notification-item-icon">${escapeHtml(item.icon)}</span>
 
@@ -22340,90 +23761,90 @@
           </span>
 
           <span class="notification-item-actions">
-            <span
+            <button
               class="notification-item-open"
-              data-notification-open="${index}"
+              type="button"
+              data-notification-open="${encodedFingerprint}"
             >
               Open →
-            </span>
+            </button>
 
-            <span
+            <button
               class="notification-item-snooze"
-              data-notification-snooze="${index}"
+              type="button"
+              data-notification-snooze="${encodedFingerprint}"
             >
               Snooze
-            </span>
+            </button>
           </span>
-        </button>`).join("");
+        </div>`;
+      }).join("");
+
+      /*
+       * Build 114.3.3 — keyed Notification Center DOM stability
+       *
+       * A list-level innerHTML comparison is not enough: one changing alert
+       * (for example a live Health Score notification) changes the complete
+       * list markup and would still rebuild every other notification button.
+       * Patch cards by their stable fingerprint instead, mirroring the
+       * Rollout Assistant's stable-card strategy. Unchanged cards keep the
+       * exact same DOM nodes, so a hovered Open/Snooze button is not destroyed
+       * by unrelated telemetry or heartbeat updates.
+       */
+      patchNotificationCenterItems(nextNotificationListHtml);
+    }
+
+    function patchNotificationCenterItems(nextMarkup) {
+      if (!notificationCenterList) return;
+
+      const template = document.createElement("template");
+      template.innerHTML = nextMarkup.trim();
+
+      const nextItems = Array.from(
+        template.content.querySelectorAll("[data-notification-fingerprint]")
+      );
+
+      const nextKeys = new Set(
+        nextItems.map(item => item.getAttribute("data-notification-fingerprint"))
+      );
 
       notificationCenterList
-        .querySelectorAll(
-          "[data-notification-index]"
-        )
-        .forEach(
-          button => {
-            button.addEventListener(
-              "click",
-              function(event) {
-                const index =
-                  Number(
-                    button.dataset.notificationIndex
-                  );
+        .querySelectorAll("[data-notification-fingerprint]")
+        .forEach(currentItem => {
+          const key = currentItem.getAttribute("data-notification-fingerprint");
+          if (!nextKeys.has(key)) currentItem.remove();
+        });
 
-                const item =
-                  items[
-                    index
-                  ];
+      nextItems.forEach((nextItem, index) => {
+        const key = nextItem.getAttribute("data-notification-fingerprint");
+        const currentItem = Array.from(
+          notificationCenterList.querySelectorAll("[data-notification-fingerprint]")
+        ).find(item => item.getAttribute("data-notification-fingerprint") === key);
 
-                if (!item) {
-                  return;
-                }
+        let itemToPlace = currentItem;
 
-                const snoozeTarget =
-                  event.target.closest(
-                    "[data-notification-snooze]"
-                  );
+        if (!currentItem) {
+          itemToPlace = nextItem.cloneNode(true);
+          notificationCenterList.appendChild(itemToPlace);
+        } else if (currentItem.outerHTML !== nextItem.outerHTML) {
+          // Only replace the notification whose own rendered state changed.
+          // Unrelated cards — including a currently hovered test card — stay put.
+          itemToPlace = nextItem.cloneNode(true);
+          currentItem.replaceWith(itemToPlace);
+        }
 
-                if (snoozeTarget) {
-                  openNotificationSnoozeMenu(
-                    event,
-                    item.fingerprint
-                  );
-
-                  return;
-                }
-
-                notificationMemory.fingerprints[
-                  item.fingerprint
-                ] =
-                  true;
-
-                notificationMemory.reviewedAt =
-                  new Date().toISOString();
-
-                addNotificationHistoryEvent(
-                  item,
-                  "reviewed",
-                  "Opened from the Notification Center."
-                );
-
-                saveNotificationMemory();
-
-                closeNotificationCenter();
-                openWorkspace(
-                  item.workspace
-                );
-              }
-            );
-          }
-        );
+        const itemAtIndex = notificationCenterList.children[index];
+        if (itemAtIndex !== itemToPlace) {
+          notificationCenterList.insertBefore(itemToPlace, itemAtIndex || null);
+        }
+      });
     }
 
     function openNotificationCenter() {
       if (!notificationCenterOverlay) return;
       closeWorkspaceNavigationMenus();
       closeCommandPalette();
-      renderNotificationCenter();
+      renderNotificationCenter({ force: true });
       setNotificationCenterView("active");
       notificationCenterOverlay.hidden = false;
       document.body.style.overflow = "hidden";
@@ -22459,7 +23880,7 @@
       if (refreshNotificationCenterButton) {
         refreshNotificationCenterButton.addEventListener(
           "click",
-          renderNotificationCenter
+          function() { renderNotificationCenter({ force: true }); }
         );
       }
 
@@ -22521,6 +23942,176 @@
           renderNotificationHistory();
         });
 
+      if (notificationCenterList) {
+        let lastNotificationPointerActionAt = 0;
+        let lastNotificationPointerActionKey = "";
+
+        function getNotificationCenterAction(target) {
+          if (!target || typeof target.closest !== "function") {
+            return null;
+          }
+
+          const snoozeTarget = target.closest(
+            "[data-notification-snooze]"
+          );
+
+          const openTarget = target.closest(
+            "[data-notification-open]"
+          );
+
+          const actionTarget = snoozeTarget || openTarget;
+
+          if (
+            !actionTarget ||
+            !notificationCenterList.contains(actionTarget)
+          ) {
+            return null;
+          }
+
+          let fingerprint = "";
+
+          try {
+            fingerprint = decodeURIComponent(
+              actionTarget.dataset.notificationSnooze ||
+              actionTarget.dataset.notificationOpen ||
+              ""
+            );
+          } catch (error) {
+            console.warn(
+              "Notification fingerprint could not be decoded.",
+              error
+            );
+            return null;
+          }
+
+          if (!fingerprint) {
+            return null;
+          }
+
+          return {
+            type: snoozeTarget ? "snooze" : "open",
+            target: actionTarget,
+            fingerprint,
+            key: `${snoozeTarget ? "snooze" : "open"}:${fingerprint}`
+          };
+        }
+
+        function runNotificationCenterAction(action) {
+          if (!action) {
+            return;
+          }
+
+          const currentItems =
+            enrichDashboardNotifications(
+              buildDashboardNotifications()
+            ).filter(
+              item =>
+                !isNotificationSnoozed(
+                  item
+                )
+            );
+
+          const item =
+            currentItems.find(
+              notification =>
+                notification.fingerprint === action.fingerprint
+            );
+
+          if (!item) {
+            renderNotificationCenter({ force: true });
+            return;
+          }
+
+          if (action.type === "snooze") {
+            openNotificationSnoozeMenu(
+              action.target,
+              item.fingerprint
+            );
+            return;
+          }
+
+          notificationMemory.fingerprints[
+            item.fingerprint
+          ] = true;
+
+          notificationMemory.reviewedAt =
+            new Date().toISOString();
+
+          addNotificationHistoryEvent(
+            item,
+            "reviewed",
+            "Opened from the Notification Center."
+          );
+
+          saveNotificationMemory();
+          closeNotificationCenter();
+          openWorkspace(item.workspace);
+        }
+
+        /*
+         * Build 114.3.1 — Notification Center interaction stability
+         *
+         * Dynamic Dashboard renders can replace a notification button
+         * between pointer-down and the browser's later click event.
+         * This mirrors the proven Rollout Assistant stability pattern:
+         * execute primary-pointer actions on pointerdown, then retain
+         * click as the keyboard/accessibility fallback with duplicate
+         * suppression.
+         */
+        notificationCenterList.addEventListener(
+          "pointerdown",
+          function(event) {
+            if (
+              event.button !== 0 ||
+              event.isPrimary === false
+            ) {
+              return;
+            }
+
+            const action =
+              getNotificationCenterAction(
+                event.target
+              );
+
+            if (!action) {
+              return;
+            }
+
+            lastNotificationPointerActionAt = Date.now();
+            lastNotificationPointerActionKey = action.key;
+
+            runNotificationCenterAction(action);
+          }
+        );
+
+        notificationCenterList.addEventListener(
+          "click",
+          function(event) {
+            const action =
+              getNotificationCenterAction(
+                event.target
+              );
+
+            if (!action) {
+              return;
+            }
+
+            const duplicatePointerClick =
+              action.key === lastNotificationPointerActionKey &&
+              Date.now() - lastNotificationPointerActionAt < 1200;
+
+            if (duplicatePointerClick) {
+              event.preventDefault();
+              return;
+            }
+
+            event.preventDefault();
+            event.stopPropagation();
+            runNotificationCenterAction(action);
+          }
+        );
+      }
+
       notificationCenterOverlay.addEventListener("click",event => {
         if (event.target === notificationCenterOverlay) closeNotificationCenter();
       });
@@ -22529,7 +24120,7 @@
           event.preventDefault(); closeNotificationCenter();
         }
       });
-      renderNotificationCenter();
+      renderNotificationCenter({ force: true });
     }
 
 
@@ -23123,7 +24714,35 @@
             });
           }
         );
-
+        
+/*
+ * =========================================================
+ * THE DEEP MAGIC — PROTECTED DASHBOARD LORE
+ * =========================================================
+ *
+ * 1969-12-31
+ *
+ * If an activity has no valid schedule date, the Dashboard
+ * may display 1969-12-31 because of the Unix Epoch / timezone
+ * fallback behavior.
+ *
+ * This originally appeared during Build 114 testing and does
+ * not affect scheduling, routing, players, or System Health.
+ *
+ * DO NOT "FIX" THIS DISPLAY QUIRK unless it begins affecting
+ * actual system functionality.
+ *
+ * Classification: DEEP MAGIC
+ * Status:         PROTECTED
+ * Severity:       LORE
+ *
+ * "Do not cite the Deep Magic to me, Witch.
+ *  I was there when it was written."
+ *
+ * — The Ancient Mini Golf Signage Manager Doctrine
+ * =========================================================
+ */
+        
       screenStates.forEach(
         state => {
           if (!state) {
@@ -28261,6 +29880,14 @@
       }
     );
 
+    document.getElementById("holidayScheduleManagerTab").addEventListener(
+      "click",
+      function() {
+        openWorkspace("holidaySchedule");
+        loadHolidayScheduleDays(true);
+      }
+    );
+
     backupHistoryTab.addEventListener(
       "click",
       function() {
@@ -28341,6 +29968,7 @@
       );
 
     setupHolidayManager();
+    loadHolidayScheduleDays();
     setupBackupHistory();
     setupImageLibrary();
     setupGitHubImagePicker();
@@ -28360,6 +29988,8 @@
     setupNotificationCenter();
     setupDashboardScrollNavigation();
     renderApplicationEnvironment();
+    setupHolidayScheduleManager();
+    setupPromoRules();
     setupMaintenanceMode();
     setupOperationsAnalytics();
     scheduleOperationsCenterRender({
@@ -28418,6 +30048,11 @@
     setInterval(
       refreshDashboard,
       DATA_REFRESH_MS
+    );
+
+    setInterval(
+      loadHolidayScheduleDays,
+      5 * 60 * 1000
     );
 
     setInterval(
