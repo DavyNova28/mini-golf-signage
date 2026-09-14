@@ -1,13 +1,13 @@
 {
-  "version": "1.4.0",
-  "displayVersion": "1.4",
+  "version": "1.5.0",
+  "displayVersion": "1.5",
   "channel": "Stable",
-  "build": "117.3",
+  "build": "118",
   "status": "Stable Release",
-  "releaseName": "Version 1.4 Operations Center",
-  "tag": "v1.4.0",
-  "basedOnVersion": "v1.3.0",
-  "basedOnBuild": "113",
-  "feature": "Holiday Schedule Days, recurring promo routing, Audit Log retention, and final fallback hardening",
+  "releaseName": "Version 1.5 Holiday Source Dropdowns",
+  "tag": "v1.5.0",
+  "basedOnVersion": "v1.4.0",
+  "basedOnBuild": "117.3",
+  "feature": "Holiday Schedule Manager controlled source-tab dropdowns with screen-specific allowlists and legacy-value protection",
   "label": "Stable Release"
 }
