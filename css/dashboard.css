@@ -2934,6 +2934,14 @@
       background: var(--surface-hover);
     }
 
+
+    .calendar-event-disabled {
+      color: var(--muted);
+      background: var(--surface-hover);
+      opacity: 0.72;
+      border: 1px dashed var(--border);
+    }
+
     .calendar-event-invalid {
       color: #ffd6d6;
       background: var(--error-dark);
@@ -10758,4 +10766,312 @@ textarea:focus-visible {
   .release-candidate-banner strong {
     white-space: normal;
   }
+}
+
+
+/*
+ * =========================================================
+ * VERSION 1.4 — BUILD 114
+ * RECURRING PROMO DAYS + TIMED HOLIDAY OVERRIDES
+ * =========================================================
+ */
+
+.promo-rules-panel {
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+}
+
+.promo-rules-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.promo-rules-title {
+  margin: 4px 0 0;
+  font-size: 0.98rem;
+}
+
+.promo-rules-description {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.promo-rules-status {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.promo-rules-list {
+  display: grid;
+  gap: 9px;
+  margin-top: 13px;
+}
+
+.promo-rule-card {
+  display: grid;
+  grid-template-columns:
+    auto
+    minmax(105px, 0.7fr)
+    minmax(105px, 0.8fr)
+    minmax(120px, 0.8fr)
+    minmax(170px, 1.2fr)
+    minmax(170px, 1.2fr)
+    auto;
+  gap: 9px;
+  align-items: end;
+  padding: 11px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--panel-soft);
+}
+
+.promo-rule-enabled {
+  border-color: var(--regular);
+}
+
+.promo-rule-card label > span {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.promo-rule-toggle {
+  align-self: center;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 800;
+}
+
+.promo-rule-toggle > span {
+  margin: 0 !important;
+  color: var(--text) !important;
+}
+
+.promo-rules-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.promo-rules-message {
+  display: none;
+  margin-top: 10px;
+  padding: 9px 10px;
+  border-radius: 9px;
+  font-size: 0.8rem;
+}
+
+.promo-rules-message.visible {
+  display: block;
+}
+
+.promo-rules-message.success {
+  border: 1px solid var(--regular);
+}
+
+.promo-rules-message.error {
+  border: 1px solid var(--error);
+}
+
+.promo-rules-empty {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+@media (max-width: 1180px) {
+  .promo-rule-card {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 650px) {
+  .promo-rules-header,
+  .promo-rule-card {
+    grid-template-columns: 1fr;
+    flex-direction: column;
+  }
+
+  .promo-rules-status {
+    white-space: normal;
+  }
+}
+
+
+/*
+ * =========================================================
+ * VERSION 1.4 — BUILD 114.1
+ * NOTIFICATION CENTER ACTION BUTTON FIX
+ * =========================================================
+ */
+
+.notification-item {
+  cursor: default;
+}
+
+.notification-item-open,
+.notification-item-snooze {
+  position: relative;
+  z-index: 1;
+  appearance: none;
+}
+
+.notification-item-open:focus-visible,
+.notification-item-snooze:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+
+/* Build 115.1 — Holiday Schedule Manager */
+.holiday-schedule-manager { border:1px solid var(--border-color); border-radius:18px; padding:20px; background:var(--panel-background); }
+.holiday-schedule-manager-actions { display:flex; flex-wrap:wrap; gap:10px; margin:16px 0; }
+.holiday-schedule-table-wrap { overflow-x:auto; border:1px solid var(--border-color); border-radius:14px; margin:14px 0; }
+.holiday-schedule-table { width:100%; min-width:1320px; border-collapse:collapse; }
+.holiday-schedule-table th,.holiday-schedule-table td { padding:9px; border-bottom:1px solid var(--border-color); text-align:left; vertical-align:middle; }
+.holiday-schedule-table th { font-size:11px; text-transform:uppercase; letter-spacing:.05em; opacity:.75; }
+.holiday-schedule-input { width:100%; min-width:110px; box-sizing:border-box; padding:8px 9px; border:1px solid var(--border-color); border-radius:8px; background:var(--input-background, transparent); color:inherit; }
+.holiday-schedule-check { text-align:center !important; }
+.holiday-schedule-check input { width:18px; height:18px; }
+
+
+/* =====================================================
+ * BUILD 117 — HOLIDAY MANAGER VISUAL GROUPING
+ * ===================================================== */
+.holiday-schedule-table-wrap {
+  border: 0;
+  background: transparent;
+  overflow-x: auto;
+}
+.holiday-schedule-table {
+  border-collapse: separate;
+  border-spacing: 0 8px;
+}
+.holiday-schedule-table thead th {
+  border-bottom: 0;
+}
+.holiday-schedule-group-row th {
+  padding: 11px 12px 9px;
+  border-top: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+  opacity: 1;
+  font-size: 11px;
+  letter-spacing: .075em;
+}
+.holiday-schedule-group-row th:first-child { border-left:1px solid var(--border-color); border-radius:10px 0 0 0; }
+.holiday-schedule-group-row th:last-child { border-right:1px solid var(--border-color); border-radius:0 10px 0 0; }
+.holiday-group-special { background:rgba(45,126,247,.10); color:#73b7ff; }
+.holiday-group-hours { background:rgba(33,190,140,.09); color:#62d8ae; }
+.holiday-group-tabs { background:rgba(147,94,255,.09); color:#b99cff; }
+.holiday-group-status { background:rgba(235,188,52,.08); color:#e7cd67; }
+.holiday-group-actions { background:rgba(45,126,247,.07); color:#9ec8ff; }
+.holiday-schedule-column-row th {
+  background:rgba(255,255,255,.018);
+  padding-top:9px;
+  padding-bottom:9px;
+}
+.holiday-schedule-table tbody tr {
+  position:relative;
+}
+.holiday-schedule-table tbody td {
+  background:rgba(255,255,255,.018);
+  border-top:1px solid var(--border-color);
+  border-bottom:1px solid var(--border-color);
+  padding:12px 10px;
+}
+.holiday-schedule-table tbody td:first-child {
+  border-left:1px solid var(--border-color);
+  border-radius:12px 0 0 12px;
+}
+.holiday-schedule-table tbody td:last-child {
+  border-right:1px solid var(--border-color);
+  border-radius:0 12px 12px 0;
+}
+.holiday-schedule-table tbody td:nth-child(3),
+.holiday-schedule-table tbody td:nth-child(5),
+.holiday-schedule-table tbody td:nth-child(9),
+.holiday-schedule-table tbody td:nth-child(11),
+.holiday-schedule-column-row th:nth-child(3),
+.holiday-schedule-column-row th:nth-child(5),
+.holiday-schedule-column-row th:nth-child(9),
+.holiday-schedule-column-row th:nth-child(11) {
+  border-left:1px solid rgba(148,163,184,.18);
+}
+.holiday-schedule-table tbody tr.holiday-row-closed td { background:rgba(71,85,105,.08); }
+.holiday-schedule-table tbody tr.holiday-row-disabled td { opacity:.72; }
+.holiday-label-stack { display:flex; flex-direction:column; gap:7px; min-width:150px; }
+.holiday-day-badge {
+  align-self:flex-start;
+  display:inline-flex;
+  align-items:center;
+  min-height:22px;
+  padding:3px 8px;
+  border-radius:999px;
+  font-size:10px;
+  font-weight:800;
+  letter-spacing:.055em;
+  text-transform:uppercase;
+  border:1px solid transparent;
+}
+.holiday-day-badge-open { color:#8af0c4; background:rgba(29,185,123,.15); border-color:rgba(29,185,123,.32); }
+.holiday-day-badge-closed { color:#ff9b9b; background:rgba(225,71,71,.14); border-color:rgba(225,71,71,.30); }
+.holiday-day-badge-disabled { color:#cbd5e1; background:rgba(148,163,184,.12); border-color:rgba(148,163,184,.25); }
+.holiday-schedule-input:disabled { cursor:not-allowed; opacity:.72; }
+
+
+/* Build 117.1 — clearer reusable-tab value bubbles */
+.holiday-schedule-tab-input {
+  background: rgba(51, 65, 85, .46);
+  border-color: rgba(148, 163, 184, .28);
+  border-radius: 9px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .035);
+  font-weight: 650;
+}
+.holiday-schedule-tab-input:hover:not(:disabled),
+.holiday-schedule-tab-input:focus {
+  background: rgba(51, 65, 85, .62);
+  border-color: rgba(115, 183, 255, .5);
+}
+.holiday-schedule-tab-input:disabled {
+  background: rgba(51, 65, 85, .30);
+  border-color: rgba(148, 163, 184, .20);
+  opacity: .78;
+}
+
+/* =====================================================
+ * BUILD 117 — AUDIT LOG RETENTION
+ * ===================================================== */
+.audit-retention-panel {
+  display:flex;
+  flex-wrap:wrap;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:16px 24px;
+  margin:16px 0;
+  padding:16px;
+  border:1px solid var(--border-color);
+  border-radius:14px;
+  background:rgba(255,255,255,.018);
+}
+.audit-retention-copy { flex:1 1 330px; }
+.audit-retention-copy h3 { margin:4px 0 4px; }
+.audit-retention-controls { display:flex; flex-wrap:wrap; align-items:flex-end; gap:10px; }
+.audit-retention-controls .audit-filter-field { min-width:190px; }
+#auditRetentionMessage { flex-basis:100%; margin:0; }
+@media (max-width: 900px) {
+  .audit-retention-controls { width:100%; }
+  .audit-retention-controls .audit-filter-field { flex:1 1 180px; }
 }
