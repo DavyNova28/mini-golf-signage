@@ -21,12 +21,12 @@
     href="favicon.png"
   >
 
-    <link rel="stylesheet" href="css/dashboard.css?build=113">
+    <link rel="stylesheet" href="css/dashboard.css?build=117.3">
 
   <meta name="application-name" content="Mini Golf Signage Manager">
-  <meta name="dashboard-version" content="1.3.0">
+  <meta name="dashboard-version" content="1.4.0">
   <meta name="dashboard-channel" content="development">
-  <meta name="dashboard-build" content="113">
+  <meta name="dashboard-build" content="117.3">
 </head>
 
 <body>
@@ -149,6 +149,10 @@
 
           <button id="holidayCalendarTab" class="workspace-nav-item" type="button">
             Holiday Calendar
+          </button>
+
+          <button id="holidayScheduleManagerTab" class="workspace-nav-item" type="button">
+            Holiday Schedule Manager
           </button>
 
           <button id="holidayManagerTab" class="workspace-nav-item" type="button">
@@ -350,7 +354,7 @@
           </div>
 
           <div class="mission-build-line">
-            <span id="applicationBuildLabel">Build 113</span>
+            <span id="applicationBuildLabel">Build 117.3</span>
             <span aria-hidden="true">•</span>
             <span id="missionEnvironmentLabel">Detecting Environment</span>
           </div>
@@ -430,7 +434,7 @@
       </section>
 
       <div class="release-candidate-banner" role="status">
-        <strong>Version 1.3 · Stable release 1</strong>
+        <strong>Version 1.3 · Development 1</strong>
         <span>Feature freeze active. Current testing is focused on regression, business-hours analytics, and field validation.</span>
       </div>
 
@@ -656,6 +660,49 @@
           <div class="schedule-routing-notice">
             Summer Sunday routes automatically to dedicated Sunday sources where configured. Legacy ArcadeWeek and ArcadeSunday URLs remain accepted and normalize to Arcade.
           </div>
+
+          <section class="promo-rules-panel" aria-labelledby="promoRulesTitle">
+            <div class="promo-rules-header">
+              <div>
+                <div class="eyebrow">Version 1.4 · Optional recurring overrides</div>
+                <h5 id="promoRulesTitle" class="promo-rules-title">
+                  Recurring Promo Days
+                </h5>
+                <p class="promo-rules-description">
+                  Promo rules are disabled by default. When enabled, Holiday Overrides still have first priority.
+                </p>
+              </div>
+
+              <span id="promoRulesStatus" class="promo-rules-status">
+                Loading…
+              </span>
+            </div>
+
+            <div id="promoRulesList" class="promo-rules-list">
+              <div class="promo-rules-empty">Loading promo rules…</div>
+            </div>
+
+            <div class="promo-rules-actions">
+              <button id="addPromoRuleButton" class="button" type="button">
+                ＋ Add promo rule
+              </button>
+
+              <button id="reloadPromoRulesButton" class="button" type="button">
+                ↻ Reload
+              </button>
+
+              <button id="savePromoRulesButton" class="button button-primary" type="button">
+                Save promo settings
+              </button>
+            </div>
+
+            <div id="promoRulesMessage" class="promo-rules-message"></div>
+
+            <div class="schedule-routing-notice">
+              Default v1.4 rules: Golf on Wednesday → <strong>GolfPromoWednesday</strong>,
+              Arcade on Thursday → <strong>ArcadePromoThursday</strong>. Both start OFF.
+            </div>
+          </section>
         </section>
 
         <section
@@ -2114,6 +2161,45 @@
       </section>
     </section>
 
+
+    <section id="holidayScheduleManagerWorkspace" class="workspace">
+      <section class="holiday-schedule-manager">
+        <div class="manager-header">
+          <div>
+            <div class="eyebrow">Build 117.3 · Special-day operations</div>
+            <h2 class="manager-title">Holiday Schedule Manager</h2>
+            <p class="manager-description">Manage date-specific business hours and choose the reusable schedule tab for each player. Holiday Schedules have priority over legacy Holiday Overrides, Promo Rules, and normal profile routing.</p>
+          </div>
+          <div id="holidayScheduleManagerStatus" class="manager-status">Loading…</div>
+        </div>
+
+        <div class="holiday-schedule-manager-actions">
+          <button id="holidayScheduleAddButton" class="button" type="button" disabled>＋ Add special day</button>
+          <button id="holidayScheduleReloadButton" class="button" type="button">↻ Reload</button>
+          <button id="holidayScheduleSaveButton" class="button button-primary" type="button" disabled>Save Holiday Schedules</button>
+        </div>
+        <div id="holidayScheduleManagerMessage" class="promo-rules-message"></div>
+        <div class="holiday-schedule-table-wrap">
+          <table class="holiday-schedule-table">
+            <thead>
+              <tr class="holiday-schedule-group-row">
+                <th colspan="2" class="holiday-group-special">Special day</th>
+                <th colspan="2" class="holiday-group-hours">Business hours</th>
+                <th colspan="4" class="holiday-group-tabs">Schedule tabs (reusable tabs)</th>
+                <th colspan="2" class="holiday-group-status">Status</th>
+                <th class="holiday-group-actions">Actions</th>
+              </tr>
+              <tr class="holiday-schedule-column-row">
+                <th>Date</th><th>Label</th><th>Open</th><th>Close</th><th>Arcade Tab</th><th>Golf Tab</th><th>Slush Tab</th><th>infoArcade Tab</th><th>Closed</th><th>Enabled</th><th></th>
+              </tr>
+            </thead>
+            <tbody id="holidayScheduleManagerBody"><tr><td colspan="11" class="manager-empty">Loading Holiday Schedule Days…</td></tr></tbody>
+          </table>
+        </div>
+        <div class="schedule-routing-notice">Changes are written to the <strong>Holiday Schedule Days</strong> Google Sheets tab. Existing reusable Holiday schedule tabs are not modified here.</div>
+      </section>
+    </section>
+
     <section
       id="holidayManagerWorkspace"
       class="workspace"
@@ -2195,7 +2281,7 @@
             class="button"
             type="button"
           >
-            ↻ Reload overrides
+            ↻ Reload special days
           </button>
         </div>
 
@@ -2375,17 +2461,19 @@
                 <th>Screen</th>
                 <th>Date range</th>
                 <th>Start time</th>
+                <th>End time</th>
                 <th>Image filename</th>
                 <th>Fade</th>
                 <th>Status</th>
                 <th>Preview</th>
+                <th>Actions</th>
               </tr>
             </thead>
 
             <tbody id="holidayTableBody">
               <tr>
                 <td
-                  colspan="9"
+                  colspan="10"
                   class="manager-empty"
                 >
                   Open this workspace to load Holiday Overrides.
@@ -3003,6 +3091,22 @@
                 Holiday Override save
               </option>
 
+              <option value="saveHolidayScheduleDays">
+                Holiday Schedule save
+              </option>
+
+              <option value="savePromoRules">
+                Promo Rules save
+              </option>
+
+              <option value="setAuditRetention">
+                Audit retention update
+              </option>
+
+              <option value="clearOldAuditLogs">
+                Audit cleanup
+              </option>
+
               <option value="restoreBackup">
                 Backup restore
               </option>
@@ -3055,6 +3159,31 @@
             ↻ Reload audit log
           </button>
         </div>
+
+        <section class="audit-retention-panel" aria-labelledby="auditRetentionHeading">
+          <div class="audit-retention-copy">
+            <div class="eyebrow">Log housekeeping</div>
+            <h3 id="auditRetentionHeading">Audit Log Retention</h3>
+            <p class="manager-description">Keep recent audit history automatically. The default retention period is 90 days.</p>
+          </div>
+
+          <div class="audit-retention-controls">
+            <label class="audit-filter-field">
+              <span class="manager-label">Keep audit logs for</span>
+              <select id="auditRetentionSelect" class="manager-select">
+                <option value="30">30 days</option>
+                <option value="60">60 days</option>
+                <option value="90" selected>90 days (default)</option>
+                <option value="forever">Forever</option>
+              </select>
+            </label>
+
+            <button id="saveAuditRetentionButton" class="button" type="button">Save retention</button>
+            <button id="clearOldAuditLogsButton" class="button button-danger" type="button">Clear old logs now</button>
+          </div>
+
+          <div id="auditRetentionMessage" class="promo-rules-message"></div>
+        </section>
 
         <section class="audit-summary-grid">
           <article class="manager-stat">
@@ -3155,7 +3284,7 @@
             </h2>
 
             <p class="manager-description">
-              Review Holiday Overrides by date. This calendar is read-only.
+              Review Holiday Schedule Days by date. Open, closed, disabled, and upcoming special days all appear here.
             </p>
           </div>
 
@@ -3204,7 +3333,7 @@
               class="button"
               type="button"
             >
-              ↻ Reload overrides
+              ↻ Reload special days
             </button>
           </div>
         </div>
@@ -3252,7 +3381,7 @@
               class="button button-primary"
               type="button"
             >
-              ＋ Create override for this date
+              ＋ Add special day for this date
             </button>
 
             <button
@@ -3260,7 +3389,7 @@
               class="button calendar-edit-button"
               type="button"
             >
-              Edit overrides for this date
+              Edit special day for this date
             </button>
           </div>
         </section>
@@ -4191,6 +4320,42 @@
     >
   </form>
 
+
+  <iframe id="holidayScheduleSaveFrame" name="holidayScheduleSaveFrame" title="Holiday Schedule save response" style="display:none"></iframe>
+  <form id="holidayScheduleSaveForm" method="post" target="holidayScheduleSaveFrame" style="display:none">
+    <input name="action" value="saveHolidayScheduleDays">
+    <input id="holidayScheduleSavePinField" name="pin">
+    <input id="holidayScheduleSaveDataField" name="days">
+    <input id="holidayScheduleSaveRequestIdField" name="requestId">
+  </form>
+
+  <iframe id="auditRetentionFrame" name="auditRetentionFrame" title="Audit retention response" style="display:none"></iframe>
+  <form id="auditRetentionForm" method="post" target="auditRetentionFrame" style="display:none">
+    <input id="auditRetentionActionField" name="action">
+    <input id="auditRetentionPinField" name="pin">
+    <input id="auditRetentionDaysField" name="retention">
+    <input id="auditRetentionRequestIdField" name="requestId">
+  </form>
+
+  <iframe
+    id="promoSaveFrame"
+    name="promoSaveFrame"
+    title="Promo rule save response"
+    style="display:none"
+  ></iframe>
+
+  <form
+    id="promoSaveForm"
+    method="post"
+    target="promoSaveFrame"
+    style="display:none"
+  >
+    <input name="action" value="savePromoRules">
+    <input id="promoSavePinField" name="pin">
+    <input id="promoSaveDataField" name="rules">
+    <input id="promoSaveRequestIdField" name="requestId">
+  </form>
+
   <section
     id="imagePickerDialog"
     class="image-picker-dialog"
@@ -4709,7 +4874,7 @@
           </div>
 
           <div id="aboutApplicationVersion" class="about-product-version">
-            Version 1.3.0 Stable · Build 113
+            Version 1.4 Development · Build 117.3
           </div>
 
           <div
@@ -4790,23 +4955,23 @@
       <div class="release-notes-current">
         <div>
           <div id="releaseNotesCurrentVersion" class="release-notes-version">
-            Version 1.3.0 Stable
+            Version 1.4 Development
           </div>
 
           <div id="releaseNotesCurrentBuild" class="release-notes-build">
-            Build 113 · Stable Release
+            Build 117.3 · Development
           </div>
         </div>
 
         <div class="release-notes-status">
-          Stable release
+          Development
         </div>
       </div>
 
       <div class="release-notes-list">
         <article class="release-note-entry">
           <div class="release-note-build">Build 112</div>
-          <h3>Version 1.3.0 Stable</h3>
+          <h3>Version 1.4 Development</h3>
           <p>
             Feature freeze for Operations Center: Business Profiles, Store Operations,
             Screen Intelligence, Maintenance Mode, functional Go-Live Preflight,
@@ -4936,7 +5101,7 @@
 
         <article class="release-note-entry">
           <div class="release-note-build">Build 74</div>
-          <h3>Stable release Diagnostics</h3>
+          <h3>Development Diagnostics</h3>
           <p>
             Added a complete downloadable diagnostics snapshot for support,
             troubleshooting, release verification, and future rollback review.
@@ -5022,7 +5187,7 @@
     <span class="back-to-top-label">Top</span>
   </button>
 
-    <script src="js/dashboard.js?build=113" defer></script>
+    <script src="js/dashboard.js?build=117.3" defer></script>
 
 
   <div id="playerDetailsBackdrop" class="player-details-backdrop" hidden></div>
