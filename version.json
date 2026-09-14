@@ -1,13 +1,13 @@
 {
-  "version": "1.4",
+  "version": "1.4.0",
   "displayVersion": "1.4",
-  "channel": "Development",
+  "channel": "Stable",
   "build": "117.3",
-  "status": "Development",
-  "releaseName": "Version 1.4 Final Fallback Hardening",
-  "tag": "",
-  "basedOnVersion": "v1.4.0",
-  "basedOnBuild": "117.2",
-  "feature": "Final release hardening: preserve routing metadata in cached schedules and complete refresh lifecycle after all screen requests settle",
-  "label": "Development"
+  "status": "Stable Release",
+  "releaseName": "Version 1.4 Operations Center",
+  "tag": "v1.4.0",
+  "basedOnVersion": "v1.3.0",
+  "basedOnBuild": "113",
+  "feature": "Holiday Schedule Days, recurring promo routing, Audit Log retention, and final fallback hardening",
+  "label": "Stable Release"
 }
