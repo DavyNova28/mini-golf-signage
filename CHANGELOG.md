@@ -3,12 +3,60 @@
 All notable changes to the **Mini Golf Signage / Dashboard** project are documented here.
 
 > **Versioning note:** The project used more than one versioning scheme during its early development.  
-> The **current Dashboard release line** is tied to numbered builds (for example, v1.3.0 / Build 113 and v1.4.0 / Build 117.3).  
+> The **current Dashboard release line** is tied to numbered builds (for example, v1.4.0 / Build 117.3 and v1.5.0 / Build 118).  
 > Older July 2026 entries are preserved under **Legacy Project History** exactly as historical milestones, so some version numbers may repeat.
 
 ---
 
 # Current Dashboard Release Line
+
+## [v1.5.0] - 2026-09-14 — Build 118
+
+**Holiday Source Dropdowns**
+
+This release improves the **Holiday Schedule Manager** by replacing manual source-tab entry with controlled, screen-specific dropdown menus. The goal is to reduce typing mistakes while preserving the existing Holiday Schedule workflow and routing behavior.
+
+### Added
+
+- Replaced the Arcade, Golf, Slush, and infoArcade Holiday source-tab text fields with controlled dropdown menus.
+- Added screen-specific source allowlists so each screen can only select approved schedule tabs for that screen.
+- Grouped available source tabs by schedule type where applicable:
+  - Holiday
+  - Regular
+  - Summer
+  - Promo
+- New Holiday Schedule Days continue to default to the standard reusable Holiday tabs:
+  - `ArcadeHoliday`
+  - `GolfHoliday`
+  - `SlushHoliday`
+  - `infoArcadeHoliday`
+
+### Improved
+
+- Reduced the risk of misspelled or invalid source-tab names when creating or editing a Holiday Schedule Day.
+- Existing approved source selections automatically repopulate in the new dropdown controls.
+- CLOSED days continue to show **Not Used - Closed** while preserving the selected source values underneath.
+- Unchecking CLOSED restores the previously selected source tabs.
+- Existing legacy or unapproved values are shown as **Current / unapproved** instead of being silently replaced.
+- Enabled, open Holiday Schedule Days cannot be saved while an unapproved source remains selected.
+
+### Unchanged
+
+- Holiday Schedule routing priority remains unchanged.
+- Holiday Calendar integration remains unchanged.
+- Duplicate-date protection remains unchanged.
+- Audit logging and Audit Log Retention remain unchanged.
+- Offline fallback and Profile-Aware Routing behavior remain unchanged.
+- No Google Apps Script changes or redeployment are required. DEV and PROD continue to use the shared Apps Script backend.
+
+### Release Information
+
+- **Version:** v1.5.0
+- **Build:** 118
+- **Channel:** Stable
+- **Status:** Stable Release
+
+---
 
 ## [v1.4.0] - 2026-09-13 — Build 117.3
 
