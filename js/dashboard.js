@@ -22,12 +22,12 @@
       "version.json";
 
     const APPLICATION_RELEASE_FALLBACK = {
-      version: "1.5.0",
+      version: "1.5.1",
       displayVersion: "1.5",
       channel: "Stable",
-      build: "118",
+      build: "119",
       status: "Stable Release",
-      tag: "v1.5.0"
+      tag: "v1.5.1"
     };
 
     let applicationRelease = {
@@ -7187,6 +7187,17 @@
     }
 
 
+    function getCurrentLocalScheduleTime() {
+      const now = new Date();
+
+      return (
+        String(now.getHours()).padStart(2, "0") +
+        ":" +
+        String(now.getMinutes()).padStart(2, "0")
+      );
+    }
+
+
     function addManagerDraftRow() {
       const screenName =
         managerScreenSelect.value;
@@ -7201,7 +7212,7 @@
       hideManagerSaveMessage();
 
       draft.push({
-        time: "12:00",
+        time: getCurrentLocalScheduleTime(),
         endTime: "",
         image: "",
         fade: 1500
