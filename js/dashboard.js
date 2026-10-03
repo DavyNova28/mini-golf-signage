@@ -22,12 +22,12 @@
       "version.json";
 
     const APPLICATION_RELEASE_FALLBACK = {
-      version: "1.5.1",
-      displayVersion: "1.5",
+      version: "1.6.0",
+      displayVersion: "1.6",
       channel: "Stable",
-      build: "119",
+      build: "120",
       status: "Stable Release",
-      tag: "v1.5.1"
+      tag: "v1.6.0"
     };
 
     let applicationRelease = {
@@ -20496,11 +20496,13 @@
           tabs: [
             "ArcadeRegularClosed",
             "ArcadeRegularWed",
-            "ArcadeRegularThuFri",
+            "ArcadeRegularThu",
+            "ArcadeRegularFri",
             "ArcadeRegularSat",
             "ArcadeRegularSun"
           ]
         },
+        { group: "Legacy / backup", tabs: ["ArcadeRegularThuFri"] },
         {
           group: "Summer",
           tabs: ["ArcadeWeek", "Arcade", "ArcadeSunday"]
