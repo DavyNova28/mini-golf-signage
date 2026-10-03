@@ -1,13 +1,13 @@
 {
-  "version": "1.5.1",
-  "displayVersion": "1.5",
+  "version": "1.6.0",
+  "displayVersion": "1.6",
   "channel": "Stable",
-  "build": "119",
+  "build": "120",
   "status": "Stable Release",
-  "releaseName": "Version 1.5.1 Current-Time Schedule Rows",
-  "tag": "v1.5.1",
-  "basedOnVersion": "v1.5.0",
-  "basedOnBuild": "118",
-  "feature": "Schedule Manager Add Row defaults to the browser's current local time instead of 12:00, without changing existing schedule behavior",
+  "releaseName": "Arcade Regular Thursday / Friday Split",
+  "tag": "v1.6.0",
+  "basedOnVersion": "v1.5.1",
+  "basedOnBuild": "119",
+  "feature": "Arcade Regular Thursday and Friday now have separate source tabs, with both available in Holiday Schedule source dropdowns.",
   "label": "Stable Release"
 }
