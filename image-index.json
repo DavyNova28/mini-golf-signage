@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-10-24T02:05:57.616944+00:00",
-  "count": 36,
+  "generatedAt": "2026-10-24T02:07:12.122592+00:00",
+  "count": 27,
   "images": [
     "assets/AfficheCentreFerme.jpg",
     "assets/AfficheMiniGolfTermine.jpg",
@@ -28,15 +28,6 @@
     "dashboard-logo.png",
     "favicon.png",
     "JurassiqueLogo.jpg",
-    "JurassiqueLogo.png",
-    "PriceMiniGolfComplet.jpg",
-    "Prices jurassique screen.jpg",
-    "PricesArcadeDetenteurReservations.jpg",
-    "PricesGolfSpecialDay.jpg",
-    "PricesJurassiqueArcade.jpg",
-    "Prix Collation (No Bunny, Cadbury ONLY).jpg",
-    "PrixArcadeHeureFermeture.jpg",
-    "SlushFerme.jpg",
-    "SlushFreezeNoTickets.jpg"
+    "JurassiqueLogo.png"
   ]
 }
