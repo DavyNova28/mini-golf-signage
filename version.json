@@ -1,13 +1,13 @@
 {
-  "version": "1.6.0",
-  "displayVersion": "1.6",
+  "version": "1.6.1",
+  "displayVersion": "1.6.1",
   "channel": "Stable",
-  "build": "120",
+  "build": "121",
   "status": "Stable Release",
-  "releaseName": "Arcade Regular Thursday / Friday Split",
-  "tag": "v1.6.0",
-  "basedOnVersion": "v1.5.1",
-  "basedOnBuild": "119",
-  "feature": "Arcade Regular Thursday and Friday now have separate source tabs, with both available in Holiday Schedule source dropdowns.",
+  "releaseName": "Centralized Image Assets",
+  "tag": "v1.6.1",
+  "basedOnVersion": "v1.6.0",
+  "basedOnBuild": "120",
+  "feature": "Filename-only schedule image references automatically resolve to the lowercase assets folder while explicit paths remain supported; Dashboard previews, picker, and image-health validation understand the centralized path.",
   "label": "Stable Release"
 }
