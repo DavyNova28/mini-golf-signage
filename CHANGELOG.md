@@ -10,6 +10,15 @@ All notable changes to the **Mini Golf Signage / Dashboard** project are documen
 
 # Current Dashboard Release Line
 
+## v1.6.1 — Build 121 — Centralized Image Assets
+
+- Added centralized `assets/` resolution for filename-only signage image references.
+- Preserved explicit-path backward compatibility.
+- Updated current player, Dashboard V3, and legacy Dashboard image preview resolution.
+- Updated Image Library and repository health validation to match filename-only schedule entries against `assets/` repository files.
+- Preserved existing Google Sheets workflow and Apps Script backend behavior.
+
+
 ## [v1.5.0] - 2026-09-14 — Build 118
 
 **Holiday Source Dropdowns**
