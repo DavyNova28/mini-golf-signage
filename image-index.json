@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-10-24T02:05:30.422674+00:00",
-  "count": 39,
+  "generatedAt": "2026-10-24T02:05:39.681922+00:00",
+  "count": 38,
   "images": [
     "assets/AfficheCentreFerme.jpg",
     "assets/AfficheMiniGolfTermine.jpg",
@@ -39,7 +39,6 @@
     "Prix Collation (No Bunny, Cadbury ONLY).jpg",
     "PrixArcadeHeureFermeture.jpg",
     "SlushFerme.jpg",
-    "SlushFreezeNoTickets.jpg",
-    "SlushPrice(No Tickets).jpg"
+    "SlushFreezeNoTickets.jpg"
   ]
 }
